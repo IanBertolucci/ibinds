@@ -24,6 +24,11 @@ type File struct {
 	Records []Record
 }
 
+// ValidMagic reports whether data begins with the CCFG magic.
+func ValidMagic(data []byte) bool {
+	return len(data) >= 4 && bytes.Equal(data[:4], magic)
+}
+
 // Parse validates magic and the size field, locates the record region, and
 // walks the records (name + NUL + fixed 68-byte region) until EOF.
 func Parse(data []byte) (*File, error) {
