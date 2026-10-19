@@ -15,6 +15,7 @@
   let profiles = $state<ProfileDTO[]>([]);
   let selected = $state<Record<string, boolean>>({});
   let controlName = $state('');
+  let controls = $state<ControlDTO[]>([]);
   let controlsByProfile = $state<Record<string, ControlDTO[]>>({});
   let binding = $state<BindingInput>({});
   let plan = $state<PlanResp | null>(null);
@@ -31,6 +32,17 @@
       const sel: Record<string, boolean> = {};
       for (const p of profiles) sel[p.id] = true;
       selected = sel;
+      // Load the control list (shared names) from the first profile that has
+      // a controls.cfg, so the function picker is populated.
+      for (const p of profiles) {
+        if (!p.hasControls) continue;
+        try {
+          controls = await api.fetchControls(p.id);
+        } catch {
+          /* ignore */
+        }
+        break;
+      }
     } catch (e) {
       error = String(e);
     }
@@ -136,7 +148,7 @@
       <section>
         <h2>Binding</h2>
         <BindingWizard
-          controls={Object.values(controlsByProfile)[0] ?? []}
+          {controls}
           {controlName}
           {binding}
           onControl={onControl}
