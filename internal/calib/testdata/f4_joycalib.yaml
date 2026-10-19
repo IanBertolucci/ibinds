@@ -1,0 +1,32 @@
+---
+CalibrationInfo:
+ DeviceList:
+ - DeviceName: 'Pedal PRS'
+   InstanceGUID: '{99176990-2EB6-11F1-8003-444553540000}'
+   ProductGUID: '{00016271-0000-0000-0000-504944564944}'
+   AxisList:
+   - Axis: 1
+     AxisName: 'Brake'
+     CalibMin: 0
+     CalibCenter: 0
+     CalibMax: 4095
+   - Axis: 2
+     AxisName: 'Throttle'
+     CalibMin: 0
+     CalibCenter: 0
+     CalibMax: 4095
+ - DeviceName: 'MOZA R9 Base'
+   InstanceGUID: '{991805D0-2EB6-11F1-800A-444553540000}'
+   ProductGUID: '{0002346E-0000-0000-0000-504944564944}'
+   AxisList:
+   - Axis: 0
+     AxisName: 'X Axis'
+     CalibMin: 0
+     CalibCenter: 32766
+     CalibMax: 65535
+   - Axis: 4
+     AxisName: 'Y Rotation'
+     CalibMin: -32767
+     CalibCenter: -32767
+     CalibMax: 32767
+...
