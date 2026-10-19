@@ -20,6 +20,7 @@ func main() {
 	token := flag.String("token", "", "fix the session token (default: random)")
 	port := flag.Int("port", 0, "port to listen on (default: 0 = ephemeral)")
 	capture := flag.Bool("capture", false, "capture a button press and exit")
+	noBrowser := flag.Bool("no-browser", false, "do not open the browser on startup")
 	flag.Parse()
 
 	config.FlagDir = *dir
@@ -69,6 +70,12 @@ func main() {
 	}
 	url := fmt.Sprintf("http://127.0.0.1:%d/?token=%s", ln.Addr().(*net.TCPAddr).Port, srv.Token())
 	fmt.Println(url)
+
+	if !*noBrowser {
+		if err := openBrowser(url); err != nil {
+			fmt.Fprintln(os.Stderr, "warning: could not open browser:", err)
+		}
+	}
 
 	if err := http.Serve(ln, srv.Handler()); err != nil {
 		fmt.Fprintln(os.Stderr, "error:", err)

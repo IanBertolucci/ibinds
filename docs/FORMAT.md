@@ -127,3 +127,17 @@ validation note in the plan's Task 9.
   validation on Windows (press a wheel button and check the reported index
   against iRacing's "Dev N Btn M").
 
+## Round-trip validation (author, Oct 2026)
+
+With the simulator closed, the tool was used to apply a key binding (`Ignition`
+→ `I`) to the `f4` profile. Verified end to end:
+
+- A timestamped `controls.cfg.bak-*` backup was created in the profile folder.
+- The binding showed correctly in iRacing's Options → Controls UI.
+- After saving inside the simulator and exiting, reopening the tool showed the
+  binding persisted and the file remained valid.
+
+Result: **pass** — surgical edits are accepted by the game and survive a
+simulator save/load cycle.
+
+
