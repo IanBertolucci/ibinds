@@ -2,8 +2,8 @@
 .superpowers/
 
 # Built binary
-ibinds.exe
-ibinds
+/ibinds.exe
+/ibinds
 
 # Go test artifacts
 *.test
