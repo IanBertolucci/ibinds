@@ -8,8 +8,8 @@ import (
 
 // Conflict reports that the target binding is already used by another control.
 type Conflict struct {
-	Control string
-	Reason  string
+	Control string `json:"control"`
+	Reason  string `json:"reason"`
 }
 
 // FindConflicts scans the file for controls whose current binding collides
