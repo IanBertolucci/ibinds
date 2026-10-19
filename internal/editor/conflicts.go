@@ -2,6 +2,7 @@ package editor
 
 import (
 	"fmt"
+	"slices"
 	"strings"
 
 	"ibinds/internal/cfgparse"
@@ -30,15 +31,16 @@ func isReplayOrCamera(name string) bool {
 }
 
 // FindConflicts scans the file for controls whose current binding collides
-// with the requested binding. The target control itself is ignored, as are
-// replay/camera controls (a separate namespace).
+// with the requested binding. The target control itself is ignored, and
+// replay/camera controls are a separate namespace: a conflict is only
+// reported between two controls in the same namespace.
 func FindConflicts(f *cfgparse.File, target string, b Binding) []Conflict {
 	out := make([]Conflict, 0)
 	for _, r := range f.Records {
 		if r.Name == target {
 			continue
 		}
-		if isReplayOrCamera(r.Name) {
+		if isReplayOrCamera(r.Name) != isReplayOrCamera(target) {
 			continue
 		}
 		switch {
@@ -48,7 +50,7 @@ func FindConflicts(f *cfgparse.File, target string, b Binding) []Conflict {
 				Reason:  fmt.Sprintf("key '%c' already bound to %s", b.Key, r.Name),
 			})
 		case b.HasButton && r.Kind == cfgparse.KindButton &&
-			r.Button == b.Button && r.Device != nil && r.Device.InstanceGUID == b.DeviceInstanceGUID:
+			slices.Contains(r.Buttons, b.Button) && r.Device != nil && r.Device.InstanceGUID == b.DeviceInstanceGUID:
 			out = append(out, Conflict{
 				Control: r.Name,
 				Reason:  fmt.Sprintf("button %d of device %s already bound to %s", b.Button, b.DeviceInstanceGUID, r.Name),

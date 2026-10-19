@@ -121,6 +121,10 @@ func (s *Server) handleProfileControls(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	id := parts[0]
+	if !validProfileID(id) {
+		http.Error(w, "invalid profile id", http.StatusBadRequest)
+		return
+	}
 
 	cfg := s.cfg.Load()
 	devices, err := deviceNames(filepath.Join(cfg.ProfilesDir, id))
@@ -242,6 +246,12 @@ func (s *Server) handlePlanBinding(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, err.Error(), http.StatusBadRequest)
 		return
 	}
+	for _, id := range req.ProfileIDs {
+		if !validProfileID(id) {
+			http.Error(w, "invalid profile id", http.StatusBadRequest)
+			return
+		}
+	}
 	cfg := s.cfg.Load()
 
 	plans := make([]planItem, 0, len(req.ProfileIDs))
@@ -284,6 +294,12 @@ func (s *Server) handleApplyBinding(w http.ResponseWriter, r *http.Request) {
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusBadRequest)
 		return
+	}
+	for _, id := range req.ProfileIDs {
+		if !validProfileID(id) {
+			http.Error(w, "invalid profile id", http.StatusBadRequest)
+			return
+		}
 	}
 	if s.simCheck != nil {
 		running, err := s.simCheck()
@@ -356,6 +372,16 @@ func (s *Server) handlePlanCalib(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, err.Error(), http.StatusBadRequest)
 		return
 	}
+	if !validProfileID(req.SourceProfileID) {
+		http.Error(w, "invalid source profile id", http.StatusBadRequest)
+		return
+	}
+	for _, id := range req.ProfileIDs {
+		if !validProfileID(id) {
+			http.Error(w, "invalid profile id", http.StatusBadRequest)
+			return
+		}
+	}
 	cfg := s.cfg.Load()
 	src, err := os.ReadFile(filepath.Join(cfg.ProfilesDir, req.SourceProfileID, "joyCalib.yaml"))
 	if err != nil {
@@ -382,6 +408,16 @@ func (s *Server) handleApplyCalib(w http.ResponseWriter, r *http.Request) {
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
 		http.Error(w, err.Error(), http.StatusBadRequest)
 		return
+	}
+	if !validProfileID(req.SourceProfileID) {
+		http.Error(w, "invalid source profile id", http.StatusBadRequest)
+		return
+	}
+	for _, id := range req.ProfileIDs {
+		if !validProfileID(id) {
+			http.Error(w, "invalid profile id", http.StatusBadRequest)
+			return
+		}
 	}
 	if s.simCheck != nil {
 		running, err := s.simCheck()
@@ -560,4 +596,17 @@ func writeJSON(w http.ResponseWriter, status int, v any) {
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(status)
 	_ = json.NewEncoder(w).Encode(v)
+}
+
+// validProfileID reports whether id is a single safe path component: not
+// empty, ".", "..", and containing no path separators. Guards against path
+// traversal via profile ids supplied by the client.
+func validProfileID(id string) bool {
+	if id == "" || id == "." || id == ".." {
+		return false
+	}
+	if strings.ContainsAny(id, `/\`) {
+		return false
+	}
+	return filepath.Base(id) == id
 }

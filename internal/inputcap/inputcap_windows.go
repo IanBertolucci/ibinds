@@ -202,11 +202,11 @@ type diDataFormat struct {
 	rgodf      uintptr
 }
 
-var enumInstances []*diDeviceInstance
+var enumInstances []diDeviceInstance
 
 //go:uintptrescapes
 func enumDevicesCallback(inst *diDeviceInstance, ref uintptr) uintptr {
-	enumInstances = append(enumInstances, inst)
+	enumInstances = append(enumInstances, *inst)
 	return diEnumContinue
 }
 
@@ -232,7 +232,7 @@ func createInput() (*iDirectInput8, error) {
 	return (*iDirectInput8)(unsafe.Pointer(p)), nil
 }
 
-func enumerateJoysticks() ([]*diDeviceInstance, error) {
+func enumerateJoysticks() ([]diDeviceInstance, error) {
 	di, err := createInput()
 	if err != nil {
 		return nil, err
@@ -242,7 +242,7 @@ func enumerateJoysticks() ([]*diDeviceInstance, error) {
 	if hr != diOK {
 		return nil, fmt.Errorf("inputcap: EnumDevices failed: 0x%x", hr)
 	}
-	out := append([]*diDeviceInstance(nil), enumInstances...)
+	out := append([]diDeviceInstance(nil), enumInstances...)
 	return out, nil
 }
 
@@ -253,7 +253,8 @@ func Enumerate() ([]DeviceInfo, error) {
 		return nil, err
 	}
 	out := make([]DeviceInfo, 0, len(instances))
-	for _, inst := range instances {
+	for i := range instances {
+		inst := &instances[i]
 		info := DeviceInfo{
 			Name:         windows.UTF16ToString(inst.tszInstanceName[:]),
 			InstanceGUID: formatGUID(inst.guidInstance),
@@ -305,7 +306,8 @@ func (directInputCapturer) Capture(opts CaptureOpts) (*CaptureResult, error) {
 		dev  *iDirectInputDevice8
 	}
 	devs := make([]open, 0, len(instances))
-	for _, inst := range instances {
+	for i := range instances {
+		inst := &instances[i]
 		dev, err := openDevice(inst)
 		if err != nil {
 			continue

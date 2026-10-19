@@ -39,6 +39,38 @@ func TestDetectIgnoresReplayControls(t *testing.T) {
 	}
 }
 
+func TestDetectCameraTargetDoesNotConflictDriving(t *testing.T) {
+	f := loadFile(t, "f4_key_u.cfg")
+	// CamFNumberDec is a camera control bound to 'U'. Targeting a camera
+	// control must not flag the driving control TractionControlArm (separate
+	// namespace).
+	conflicts := FindConflicts(f, "CamFNumberDec", Binding{Key: 'U', HasKey: true})
+	if containsControl(conflicts, "TractionControlArm") {
+		t.Fatalf("driving control flagged for a camera target: %+v", conflicts)
+	}
+}
+
+func TestDetectButtonConflictMultiButton(t *testing.T) {
+	f := loadFile(t, "f4_key_u.cfg")
+	tearoff := findRecord(f, "TearOffVisor")
+	if tearoff == nil {
+		t.Fatal("TearOffVisor not found")
+	}
+	if len(tearoff.Buttons) < 2 {
+		t.Fatalf("TearOffVisor.Buttons = %v, want at least 2", tearoff.Buttons)
+	}
+	second := tearoff.Buttons[1]
+	conflicts := FindConflicts(f, "Ignition", Binding{
+		Button:             second,
+		HasButton:          true,
+		DeviceInstanceGUID: tearoff.Device.InstanceGUID,
+		ProductGUID:        tearoff.Device.ProductGUID,
+	})
+	if !containsControl(conflicts, "TearOffVisor") {
+		t.Fatalf("conflicts = %+v, want TearOffVisor (button %d)", conflicts, second)
+	}
+}
+
 func TestDetectNoConflictWhenUnbound(t *testing.T) {
 	f := loadFile(t, "f4_key_u.cfg")
 	conflicts := FindConflicts(f, "Ignition", Binding{Key: 'q', HasKey: true})

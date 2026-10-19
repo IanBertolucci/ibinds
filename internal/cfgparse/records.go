@@ -25,8 +25,9 @@ type Record struct {
 	Offset       int // absolute offset of the record's first byte (the name)
 	PayloadStart int // absolute offset of the 68-byte fixed region
 	Kind         BindingKind
-	Key          byte // ASCII key, for KindKey
-	Button       int  // lowest set button, for KindButton
+	Key          byte  // ASCII key, for KindKey
+	Button       int   // lowest set button, for KindButton
+	Buttons      []int // all set buttons, for KindButton
 	Device       *Device
 	Opaque       []byte
 }

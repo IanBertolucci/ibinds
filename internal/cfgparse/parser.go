@@ -82,7 +82,10 @@ func classify(r *Record, fixed []byte) {
 		r.Kind = KindAxis
 	case 2:
 		r.Kind = KindButton
-		r.Button = buttonFromMask(fixed[MaskWordsOffset : MaskWordsOffset+MaskWordCount*4])
+		r.Buttons = buttonsFromMask(fixed[MaskWordsOffset : MaskWordsOffset+MaskWordCount*4])
+		if len(r.Buttons) > 0 {
+			r.Button = r.Buttons[0]
+		}
 		r.Device = &Device{
 			InstanceGUID: formatGUID(fixed[GUIDOffset : GUIDOffset+16]),
 			ProductGUID:  formatProductGUID(fixed[ProductOffset : ProductOffset+4]),
@@ -95,16 +98,18 @@ func classify(r *Record, fixed []byte) {
 	}
 }
 
-// buttonFromMask finds the lowest set button across the five mask words
+// buttonsFromMask returns every set button across the five mask words
 // (buttons 0..159). Button N is bit N%32 of word N/32.
-func buttonFromMask(words []byte) int {
+func buttonsFromMask(words []byte) []int {
+	var out []int
 	for w := 0; w < MaskWordCount; w++ {
 		word := binary.LittleEndian.Uint32(words[w*4:])
-		if word != 0 {
-			return w*32 + bits.TrailingZeros32(word)
+		for word != 0 {
+			out = append(out, w*32+bits.TrailingZeros32(word))
+			word &= word - 1 // clear lowest set bit
 		}
 	}
-	return 0
+	return out
 }
 
 // formatGUID renders a 16-byte Windows GUID (Data1/Data2/Data3 little-endian)

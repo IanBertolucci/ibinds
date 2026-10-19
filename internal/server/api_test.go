@@ -459,6 +459,22 @@ func TestInputDevicesFallsBackToCalib(t *testing.T) {
 	}
 }
 
+func TestApplyBindingRejectsTraversal(t *testing.T) {
+	dir := setupProfilesDir(t, map[string]string{"f4": "f4_key_u.cfg"})
+	ts := newServer(t, dir, ServerOpts{})
+
+	req := map[string]any{
+		"control":    "Ignition",
+		"binding":    map[string]any{"key": "I"},
+		"profileIds": []string{".."},
+		"force":      false,
+	}
+	resp := postJSON(t, ts, "/api/apply/binding?token="+testToken, req)
+	if resp.StatusCode != http.StatusBadRequest {
+		t.Fatalf("status = %d, want 400 for traversal profile id", resp.StatusCode)
+	}
+}
+
 func contains(s, sub string) bool {
 	return bytes.Contains([]byte(s), []byte(sub))
 }
