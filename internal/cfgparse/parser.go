@@ -1,0 +1,134 @@
+package cfgparse
+
+import (
+	"bytes"
+	"encoding/binary"
+	"errors"
+	"fmt"
+	"math/bits"
+)
+
+var (
+	ErrBadMagic  = errors.New("cfgparse: bad magic")
+	ErrTruncated = errors.New("cfgparse: truncated")
+)
+
+var (
+	magic      = []byte("GFCC")
+	chunkMagic = []byte("LRTC")
+)
+
+// File is a parsed controls.cfg.
+type File struct {
+	Raw     []byte
+	Records []Record
+}
+
+// ValidMagic reports whether data begins with the CCFG magic.
+func ValidMagic(data []byte) bool {
+	return len(data) >= 4 && bytes.Equal(data[:4], magic)
+}
+
+// Parse validates magic and the size field, locates the record region, and
+// walks the records (name + NUL + fixed 68-byte region) until EOF.
+func Parse(data []byte) (*File, error) {
+	if len(data) < 12 {
+		return nil, ErrTruncated
+	}
+	if !bytes.Equal(data[0:4], magic) {
+		return nil, ErrBadMagic
+	}
+	if int(binary.LittleEndian.Uint32(data[8:12])) != len(data)-12 {
+		return nil, ErrTruncated
+	}
+
+	limit := len(data)
+	if limit > 0x200 {
+		limit = 0x200
+	}
+	idx := bytes.Index(data[:limit], chunkMagic)
+	if idx < 0 {
+		return nil, ErrTruncated
+	}
+	start := idx + len(chunkMagic) + 8
+
+	f := &File{Raw: data}
+	pos := start
+	for pos < len(data) {
+		nul := bytes.IndexByte(data[pos:], 0)
+		if nul < 0 {
+			return nil, ErrTruncated
+		}
+		name := string(data[pos : pos+nul])
+		payloadStart := pos + nul + 1
+		end := payloadStart + FixedRegionSize
+		if end > len(data) {
+			return nil, ErrTruncated
+		}
+		rec := Record{
+			Name:         name,
+			Offset:       pos,
+			PayloadStart: payloadStart,
+			Opaque:       data[pos:end],
+		}
+		classify(&rec, data[payloadStart:end])
+		f.Records = append(f.Records, rec)
+		pos = end
+	}
+	return f, nil
+}
+
+func classify(r *Record, fixed []byte) {
+	switch binary.LittleEndian.Uint32(fixed[TypeOffset : TypeOffset+4]) {
+	case 0:
+		r.Kind = KindUnbound
+	case 1:
+		r.Kind = KindAxis
+	case 2:
+		r.Kind = KindButton
+		r.Buttons = buttonsFromMask(fixed[MaskWordsOffset : MaskWordsOffset+MaskWordCount*4])
+		if len(r.Buttons) > 0 {
+			r.Button = r.Buttons[0]
+		}
+		r.Device = &Device{
+			InstanceGUID: formatGUID(fixed[GUIDOffset : GUIDOffset+16]),
+			ProductGUID:  formatProductGUID(fixed[ProductOffset : ProductOffset+4]),
+		}
+	case 4:
+		r.Kind = KindKey
+		r.Key = fixed[KeyOffset]
+	default:
+		r.Kind = KindUnknown
+	}
+}
+
+// buttonsFromMask returns every set button across the five mask words
+// (buttons 0..159). Button N is bit N%32 of word N/32.
+func buttonsFromMask(words []byte) []int {
+	var out []int
+	for w := 0; w < MaskWordCount; w++ {
+		word := binary.LittleEndian.Uint32(words[w*4:])
+		for word != 0 {
+			out = append(out, w*32+bits.TrailingZeros32(word))
+			word &= word - 1 // clear lowest set bit
+		}
+	}
+	return out
+}
+
+// formatGUID renders a 16-byte Windows GUID (Data1/Data2/Data3 little-endian)
+// as "{8-4-4-4-12}" uppercase hex.
+func formatGUID(b []byte) string {
+	d1 := binary.LittleEndian.Uint32(b[0:4])
+	d2 := binary.LittleEndian.Uint16(b[4:6])
+	d3 := binary.LittleEndian.Uint16(b[6:8])
+	d4 := b[8:16]
+	return fmt.Sprintf("{%08X-%04X-%04X-%02X%02X-%02X%02X%02X%02X%02X%02X}",
+		d1, d2, d3, d4[0], d4[1], d4[2], d4[3], d4[4], d4[5], d4[6], d4[7])
+}
+
+// formatProductGUID renders a 4-byte ProductID as the derived ProductGUID
+// string "{<pid:08X>-0000-0000-0000-504944564944}".
+func formatProductGUID(pid []byte) string {
+	return fmt.Sprintf("{%08X-0000-0000-0000-504944564944}", binary.LittleEndian.Uint32(pid))
+}

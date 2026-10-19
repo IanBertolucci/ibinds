@@ -1,0 +1,5 @@
+node_modules/
+.vite/
+
+# The built SPA is committed to the repo (embedded via go:embed).
+!dist

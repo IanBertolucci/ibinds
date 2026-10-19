@@ -1,0 +1,10 @@
+# Superpowers SDD workspace (scratch)
+.superpowers/
+
+# Built binary
+/ibinds.exe
+/ibinds
+
+# Go test artifacts
+*.test
+*.out
