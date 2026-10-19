@@ -33,7 +33,7 @@ func isReplayOrCamera(name string) bool {
 // with the requested binding. The target control itself is ignored, as are
 // replay/camera controls (a separate namespace).
 func FindConflicts(f *cfgparse.File, target string, b Binding) []Conflict {
-	var out []Conflict
+	out := make([]Conflict, 0)
 	for _, r := range f.Records {
 		if r.Name == target {
 			continue

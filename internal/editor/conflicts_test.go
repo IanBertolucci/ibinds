@@ -47,6 +47,14 @@ func TestDetectNoConflictWhenUnbound(t *testing.T) {
 	}
 }
 
+func TestFindConflictsReturnsEmptySlice(t *testing.T) {
+	f := loadFile(t, "f4_key_u.cfg")
+	conflicts := FindConflicts(f, "Ignition", Binding{Key: 'q', HasKey: true})
+	if conflicts == nil {
+		t.Fatal("FindConflicts returned nil, want an empty slice (marshals to [] not null)")
+	}
+}
+
 func TestDetectButtonConflictSameDevice(t *testing.T) {
 	f := loadFile(t, "f4_btn128.cfg")
 	out, _, err := ApplyBinding(f, "Ignition", Binding{
