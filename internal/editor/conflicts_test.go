@@ -17,14 +17,25 @@ func containsControl(cs []Conflict, name string) bool {
 
 func TestDetectKeyConflict(t *testing.T) {
 	f := loadFile(t, "f4_key_u.cfg")
-	// 'U' is bound to TractionControlArm, CamFocusDepthDec and CamFNumberDec
-	// in the real fixture (the profile already has duplicate key bindings).
+	// 'U' is bound to TractionControlArm (driving) and to two camera controls
+	// (CamFocusDepthDec, CamFNumberDec) — the camera controls are a separate
+	// namespace and must not be flagged.
 	conflicts := FindConflicts(f, "Ignition", Binding{Key: 'U', HasKey: true})
-	if len(conflicts) != 3 {
-		t.Fatalf("len(conflicts) = %d, want 3 (%+v)", len(conflicts), conflicts)
+	if len(conflicts) != 1 {
+		t.Fatalf("len(conflicts) = %d, want 1 (%+v)", len(conflicts), conflicts)
 	}
 	if !containsControl(conflicts, "TractionControlArm") {
 		t.Fatalf("conflicts missing TractionControlArm: %+v", conflicts)
+	}
+}
+
+func TestDetectIgnoresReplayControls(t *testing.T) {
+	f := loadFile(t, "f4_key_u.cfg")
+	conflicts := FindConflicts(f, "Ignition", Binding{Key: 'U', HasKey: true})
+	for _, c := range conflicts {
+		if isReplayOrCamera(c.Control) {
+			t.Fatalf("replay/camera control %q was flagged as a conflict", c.Control)
+		}
 	}
 }
 
