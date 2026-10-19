@@ -103,3 +103,27 @@ To set a binding on a record (see `internal/editor`):
 The simulator's real `btn130 → btn128` transition changed only the mask word
 (`4` → `1`); its `key U` transition wrote type `4`, key byte `55`, and zeroed
 the mask/GUID/ProductID/`PIDVID` regions.
+
+## Device capture (DirectInput)
+
+`internal/inputcap` captures button presses via DirectInput 8 (`dinput8.dll`).
+The COM vtables (`IDirectInput8`, `IDirectInputDevice8`) are hand-written
+(go-ole has no DirectInput bindings); they compile for `GOOS=windows` but were
+not exercised on the author's machine at the time of writing — see the manual
+validation note in the plan's Task 9.
+
+- The device `InstanceGUID` string is rendered from `DIDEVICEINSTANCE.guidInstance`.
+- The `ProductGUID` string is derived from `DIDEVCAPS.dwProductId` as
+  `{<pid:08X>-0000-0000-0000-504944564944}` (the trailing `504944564944` is
+  `"PIDVID"` hex). This matches the real `joyCalib.yaml` ProductGUID
+  (e.g. MOZA `dwProductId` `0x0002346E` → `{0002346E-0000-0000-0000-504944564944}`).
+  The plan's `{0000<pid:%04X>-…}` wording was imprecise; the full 32-bit
+  ProductID is used.
+- **Offline fallback:** when DirectInput is unavailable (non-Windows, or no
+  device), the server's `GET /api/input/devices` falls back to listing the
+  devices from the profiles' `joyCalib.yaml` files (`ButtonCount` unknown/0),
+  and capture mode degrades to the device/button dropdown. This decision is
+  recorded deliberately — the DirectInput capture path still requires manual
+  validation on Windows (press a wheel button and check the reported index
+  against iRacing's "Dev N Btn M").
+

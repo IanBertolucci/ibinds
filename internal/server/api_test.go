@@ -11,6 +11,7 @@ import (
 	"testing"
 
 	"ibinds/internal/config"
+	"ibinds/internal/inputcap"
 )
 
 const testToken = "testtoken"
@@ -398,6 +399,64 @@ func findControl(controls []map[string]any, name string) map[string]any {
 		}
 	}
 	return nil
+}
+
+type fakeCapturer struct {
+	result *inputcap.CaptureResult
+	err    error
+}
+
+func (f fakeCapturer) Capture(opts inputcap.CaptureOpts) (*inputcap.CaptureResult, error) {
+	return f.result, f.err
+}
+
+func TestInputCaptureUsesInjectedCapturer(t *testing.T) {
+	dir := setupProfilesDir(t, map[string]string{"f4": "f4_key_u.cfg"})
+	ts := newServer(t, dir, ServerOpts{
+		InputCapturer: fakeCapturer{result: &inputcap.CaptureResult{
+			Button:             32,
+			DeviceInstanceGUID: "{991805D0-2EB6-11F1-800A-444553540000}",
+			ProductGUID:        "{0002346E-0000-0000-0000-504944564944}",
+		}},
+	})
+
+	resp := postJSON(t, ts, "/api/input/capture?token="+testToken, map[string]any{"timeoutMs": 1000})
+	if resp.StatusCode != http.StatusOK {
+		t.Fatalf("status = %d, want 200", resp.StatusCode)
+	}
+	var result map[string]any
+	if err := json.Unmarshal(readBody(t, resp), &result); err != nil {
+		t.Fatal(err)
+	}
+	if int(result["button"].(float64)) != 32 {
+		t.Fatalf("button = %v, want 32", result["button"])
+	}
+}
+
+func TestInputDevicesFallsBackToCalib(t *testing.T) {
+	dir := setupProfilesDir(t, map[string]string{"f4": "f4_key_u.cfg"})
+	ts := newServer(t, dir, ServerOpts{})
+
+	resp := get(t, ts, "/api/input/devices?token="+testToken)
+	if resp.StatusCode != http.StatusOK {
+		t.Fatalf("status = %d, want 200", resp.StatusCode)
+	}
+	var devices []map[string]any
+	if err := json.Unmarshal(readBody(t, resp), &devices); err != nil {
+		t.Fatal(err)
+	}
+	if len(devices) != 2 {
+		t.Fatalf("len = %d, want 2 (Pedal PRS + MOZA R9 Base)", len(devices))
+	}
+	found := false
+	for _, d := range devices {
+		if d["name"] == "MOZA R9 Base" {
+			found = true
+		}
+	}
+	if !found {
+		t.Fatalf("devices = %+v, want MOZA R9 Base present", devices)
+	}
 }
 
 func contains(s, sub string) bool {

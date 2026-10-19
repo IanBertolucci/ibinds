@@ -36,6 +36,7 @@ func (s *Server) routes() {
 	s.mux.HandleFunc("/api/plan/calib", s.api(s.handlePlanCalib))
 	s.mux.HandleFunc("/api/apply/calib", s.api(s.handleApplyCalib))
 	s.mux.HandleFunc("/api/input/capture", s.api(s.handleInputCapture))
+	s.mux.HandleFunc("/api/input/devices", s.api(s.handleInputDevices))
 }
 
 // api wraps a handler with the token check.
@@ -462,6 +463,55 @@ func (s *Server) handleInputCapture(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	writeJSON(w, http.StatusOK, result)
+}
+
+func (s *Server) handleInputDevices(w http.ResponseWriter, r *http.Request) {
+	devices, err := inputcap.Enumerate()
+	if err == nil && len(devices) > 0 {
+		writeJSON(w, http.StatusOK, devices)
+		return
+	}
+	cfg := s.cfg.Load()
+	fallback, err := devicesFromProfiles(cfg.ProfilesDir)
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+	writeJSON(w, http.StatusOK, fallback)
+}
+
+// devicesFromProfiles is the offline fallback for device enumeration: it
+// collects the unique devices listed in the profiles' joyCalib.yaml files.
+func devicesFromProfiles(profDir string) ([]inputcap.DeviceInfo, error) {
+	ps, err := profiles.Scan(profDir)
+	if err != nil {
+		return nil, err
+	}
+	seen := map[string]bool{}
+	out := []inputcap.DeviceInfo{}
+	for _, p := range ps {
+		data, err := os.ReadFile(filepath.Join(p.Dir, "joyCalib.yaml"))
+		if err != nil {
+			continue
+		}
+		c, err := calib.Parse(data)
+		if err != nil {
+			continue
+		}
+		for _, d := range c.Devices {
+			if seen[d.InstanceGUID] {
+				continue
+			}
+			seen[d.InstanceGUID] = true
+			out = append(out, inputcap.DeviceInfo{
+				Name:         d.Name,
+				InstanceGUID: d.InstanceGUID,
+				ProductGUID:  d.ProductGUID,
+				ButtonCount:  0,
+			})
+		}
+	}
+	return out, nil
 }
 
 func kindString(k cfgparse.BindingKind) string {
