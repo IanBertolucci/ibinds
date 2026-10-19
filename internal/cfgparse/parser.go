@@ -42,7 +42,11 @@ func Parse(data []byte) (*File, error) {
 		return nil, ErrTruncated
 	}
 
-	idx := bytes.Index(data, chunkMagic)
+	limit := len(data)
+	if limit > 0x200 {
+		limit = 0x200
+	}
+	idx := bytes.Index(data[:limit], chunkMagic)
 	if idx < 0 {
 		return nil, ErrTruncated
 	}

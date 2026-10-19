@@ -168,6 +168,10 @@ func (s *Server) handleSettings(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, err.Error(), http.StatusBadRequest)
 		return
 	}
+	if info, err := os.Stat(req.ProfilesDir); err != nil || !info.IsDir() {
+		http.Error(w, "profilesDir is not a valid directory", http.StatusBadRequest)
+		return
+	}
 	newCfg := &config.Config{ProfilesDir: req.ProfilesDir}
 	if err := config.Save(newCfg); err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
@@ -189,7 +193,14 @@ func (b bindingJSON) toBinding() (editor.Binding, error) {
 		if len(b.Key) != 1 {
 			return editor.Binding{}, errors.New("key must be a single character")
 		}
-		return editor.Binding{Key: b.Key[0], HasKey: true}, nil
+		c := b.Key[0]
+		if c >= 'a' && c <= 'z' {
+			c -= 'a' - 'A'
+		}
+		if !((c >= '0' && c <= '9') || (c >= 'A' && c <= 'Z')) {
+			return editor.Binding{}, errors.New("key must be a printable A-Z or 0-9 character")
+		}
+		return editor.Binding{Key: c, HasKey: true}, nil
 	}
 	if b.DeviceInstanceGUID != "" {
 		return editor.Binding{
@@ -350,7 +361,7 @@ func (s *Server) handleApplyBinding(w http.ResponseWriter, r *http.Request) {
 			skipped = append(skipped, skippedItem{ProfileID: id, Reason: err.Error()})
 			continue
 		}
-		if err := os.WriteFile(cfgPath, newData, 0o644); err != nil {
+		if err := fileops.AtomicWrite(cfgPath, newData); err != nil {
 			skipped = append(skipped, skippedItem{ProfileID: id, Reason: err.Error()})
 			continue
 		}
@@ -459,7 +470,7 @@ func (s *Server) handleApplyCalib(w http.ResponseWriter, r *http.Request) {
 			skipped = append(skipped, skippedItem{ProfileID: id, Reason: err.Error()})
 			continue
 		}
-		if err := os.WriteFile(dstPath, src, 0o644); err != nil {
+		if err := fileops.AtomicWrite(dstPath, src); err != nil {
 			skipped = append(skipped, skippedItem{ProfileID: id, Reason: err.Error()})
 			continue
 		}

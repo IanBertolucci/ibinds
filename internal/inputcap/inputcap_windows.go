@@ -4,6 +4,7 @@ package inputcap
 
 import (
 	"fmt"
+	"sync"
 	"syscall"
 	"time"
 	"unsafe"
@@ -202,11 +203,16 @@ type diDataFormat struct {
 	rgodf      uintptr
 }
 
-var enumInstances []diDeviceInstance
+var (
+	enumMu        sync.Mutex
+	enumInstances []diDeviceInstance
+)
 
 //go:uintptrescapes
 func enumDevicesCallback(inst *diDeviceInstance, ref uintptr) uintptr {
+	enumMu.Lock()
 	enumInstances = append(enumInstances, *inst)
+	enumMu.Unlock()
 	return diEnumContinue
 }
 
@@ -237,12 +243,17 @@ func enumerateJoysticks() ([]diDeviceInstance, error) {
 	if err != nil {
 		return nil, err
 	}
+	defer di.Release()
+	enumMu.Lock()
 	enumInstances = nil
+	enumMu.Unlock()
 	hr := di.EnumDevices(di8DevClassGameCtrl, windows.NewCallback(enumDevicesCallback), 0, diEDFLAttachedOnly)
 	if hr != diOK {
 		return nil, fmt.Errorf("inputcap: EnumDevices failed: 0x%x", hr)
 	}
+	enumMu.Lock()
 	out := append([]diDeviceInstance(nil), enumInstances...)
+	enumMu.Unlock()
 	return out, nil
 }
 
@@ -262,6 +273,7 @@ func Enumerate() ([]DeviceInfo, error) {
 		}
 		if dev, err := openDevice(inst); err == nil {
 			info.ButtonCount = deviceButtonCount(dev)
+			dev.Release()
 		}
 		out = append(out, info)
 	}
@@ -273,12 +285,28 @@ func openDevice(inst *diDeviceInstance) (*iDirectInputDevice8, error) {
 	if err != nil {
 		return nil, err
 	}
+	defer di.Release()
 	var dev *iDirectInputDevice8
 	hr := di.CreateDevice(&inst.guidInstance, &dev)
 	if hr != diOK {
 		return nil, fmt.Errorf("inputcap: CreateDevice failed: 0x%x", hr)
 	}
 	return dev, nil
+}
+
+func (d *iDirectInput8) Release() uintptr {
+	r1, _, _ := syscall.SyscallN(d.vtbl.Release, uintptr(unsafe.Pointer(d)))
+	return r1
+}
+
+func (d *iDirectInputDevice8) Release() uintptr {
+	r1, _, _ := syscall.SyscallN(d.vtbl.Release, uintptr(unsafe.Pointer(d)))
+	return r1
+}
+
+func (d *iDirectInputDevice8) Poll() uintptr {
+	r1, _, _ := syscall.SyscallN(d.vtbl.Poll, uintptr(unsafe.Pointer(d)))
+	return r1
 }
 
 func deviceButtonCount(dev *iDirectInputDevice8) int {
@@ -323,6 +351,11 @@ func (directInputCapturer) Capture(opts CaptureOpts) (*CaptureResult, error) {
 	if len(devs) == 0 {
 		return nil, ErrUnsupported
 	}
+	defer func() {
+		for _, d := range devs {
+			d.dev.Release()
+		}
+	}()
 
 	deadline := time.Now().Add(opts.timeout())
 	for {
@@ -331,6 +364,7 @@ func (directInputCapturer) Capture(opts CaptureOpts) (*CaptureResult, error) {
 			if d.dev.Acquire() != diOK {
 				continue
 			}
+			d.dev.Poll()
 			if hr := d.dev.GetDeviceState(uint32(unsafe.Sizeof(state)), uintptr(unsafe.Pointer(&state))); hr != diOK {
 				continue
 			}

@@ -164,6 +164,9 @@ func TestSettingsPersistsProfilesDir(t *testing.T) {
 	ts := newServer(t, dir, ServerOpts{})
 
 	newDir := filepath.Join(dir, "newdir")
+	if err := os.MkdirAll(newDir, 0o755); err != nil {
+		t.Fatal(err)
+	}
 	if resp := postJSON(t, ts, "/api/settings?token="+testToken, map[string]any{"profilesDir": newDir}); resp.StatusCode != http.StatusOK {
 		t.Fatalf("status = %d, want 200", resp.StatusCode)
 	}
