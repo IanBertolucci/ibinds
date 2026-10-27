@@ -10,7 +10,9 @@ import (
 	"path/filepath"
 	"testing"
 
+	"ibinds/internal/cfgparse"
 	"ibinds/internal/config"
+	"ibinds/internal/editor"
 	"ibinds/internal/inputcap"
 )
 
@@ -402,6 +404,223 @@ func findControl(controls []map[string]any, name string) map[string]any {
 		}
 	}
 	return nil
+}
+
+func writeProfile(t *testing.T, dir, id, cfgName string, edits map[string]editor.Binding) {
+	t.Helper()
+	pd := filepath.Join(dir, id)
+	if err := os.MkdirAll(pd, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	copyFixture(t, filepath.Join("..", "cfgparse", "testdata", cfgName), filepath.Join(pd, "controls.cfg"))
+	copyFixture(t, filepath.Join("..", "calib", "testdata", "f4_joycalib.yaml"), filepath.Join(pd, "joyCalib.yaml"))
+	if len(edits) == 0 {
+		return
+	}
+	data, err := os.ReadFile(filepath.Join(pd, "controls.cfg"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	cur := data
+	for control, b := range edits {
+		f, err := cfgparse.Parse(cur)
+		if err != nil {
+			t.Fatal(err)
+		}
+		cur, _, err = editor.ApplyBinding(f, control, b)
+		if err != nil {
+			t.Fatalf("ApplyBinding %s: %v", control, err)
+		}
+	}
+	if err := os.WriteFile(filepath.Join(pd, "controls.cfg"), cur, 0o644); err != nil {
+		t.Fatal(err)
+	}
+}
+
+func TestControlsListExposesButtons(t *testing.T) {
+	dir := setupProfilesDir(t, map[string]string{"f4": "f4_btn130.cfg"})
+	ts := newServer(t, dir, ServerOpts{})
+
+	resp := get(t, ts, "/api/profiles/f4/controls?token="+testToken)
+	var controls []map[string]any
+	if err := json.Unmarshal(readBody(t, resp), &controls); err != nil {
+		t.Fatal(err)
+	}
+	tca := findControl(controls, "TractionControlArm")
+	if tca == nil {
+		t.Fatal("TractionControlArm not found")
+	}
+	buttons, ok := tca["buttons"].([]any)
+	if !ok || len(buttons) != 1 || int(buttons[0].(float64)) != 130 {
+		t.Fatalf("buttons = %v, want [130]", tca["buttons"])
+	}
+}
+
+func TestControlsListButtonsEmptyForKey(t *testing.T) {
+	dir := setupProfilesDir(t, map[string]string{"f4": "f4_key_u.cfg"})
+	ts := newServer(t, dir, ServerOpts{})
+
+	resp := get(t, ts, "/api/profiles/f4/controls?token="+testToken)
+	var controls []map[string]any
+	if err := json.Unmarshal(readBody(t, resp), &controls); err != nil {
+		t.Fatal(err)
+	}
+	tca := findControl(controls, "TractionControlArm")
+	if tca == nil {
+		t.Fatal("TractionControlArm not found")
+	}
+	buttons, ok := tca["buttons"].([]any)
+	if !ok || len(buttons) != 0 {
+		t.Fatalf("buttons = %v, want []", tca["buttons"])
+	}
+}
+
+func TestPlanCopyReturnsPlans(t *testing.T) {
+	dir := t.TempDir()
+	writeProfile(t, dir, "src", "f4_key_u.cfg", nil)
+	writeProfile(t, dir, "dst", "f4_btn128.cfg", nil)
+	ts := newServer(t, dir, ServerOpts{})
+
+	req := map[string]any{
+		"sourceProfileId": "src",
+		"controls":        []string{"TractionControlArm"},
+		"profileIds":      []string{"dst"},
+	}
+	resp := postJSON(t, ts, "/api/plan/copy?token="+testToken, req)
+	if resp.StatusCode != http.StatusOK {
+		t.Fatalf("status = %d, want 200 (%s)", resp.StatusCode, readBody(t, resp))
+	}
+	var plan struct {
+		Plans []map[string]any `json:"plans"`
+	}
+	if err := json.Unmarshal(readBody(t, resp), &plan); err != nil {
+		t.Fatal(err)
+	}
+	if len(plan.Plans) != 1 {
+		t.Fatalf("plans = %+v, want 1", plan.Plans)
+	}
+	if conflicts, ok := plan.Plans[0]["conflicts"].([]any); !ok || len(conflicts) != 0 {
+		t.Fatalf("conflicts = %v, want empty", plan.Plans[0]["conflicts"])
+	}
+}
+
+func TestApplyCopyWritesTarget(t *testing.T) {
+	dir := t.TempDir()
+	writeProfile(t, dir, "src", "f4_key_u.cfg", nil)
+	writeProfile(t, dir, "dst", "f4_btn128.cfg", nil)
+	ts := newServer(t, dir, ServerOpts{})
+
+	req := map[string]any{
+		"sourceProfileId": "src",
+		"controls":        []string{"TractionControlArm"},
+		"profileIds":      []string{"dst"},
+	}
+	resp := postJSON(t, ts, "/api/apply/copy?token="+testToken, req)
+	if resp.StatusCode != http.StatusOK {
+		t.Fatalf("status = %d, want 200 (%s)", resp.StatusCode, readBody(t, resp))
+	}
+	var out struct {
+		Applied []map[string]any `json:"applied"`
+	}
+	if err := json.Unmarshal(readBody(t, resp), &out); err != nil {
+		t.Fatal(err)
+	}
+	if len(out.Applied) != 1 || out.Applied[0]["profileId"] != "dst" {
+		t.Fatalf("applied = %+v, want exactly dst", out.Applied)
+	}
+	want, err := os.ReadFile(filepath.Join("..", "cfgparse", "testdata", "f4_key_u.cfg"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	got, err := os.ReadFile(filepath.Join(dir, "dst", "controls.cfg"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !bytes.Equal(want, got) {
+		t.Fatal("dst/controls.cfg not byte-identical to f4_key_u.cfg")
+	}
+}
+
+func TestApplyCopySkipsConflict(t *testing.T) {
+	dir := t.TempDir()
+	writeProfile(t, dir, "src", "f4_key_u.cfg", map[string]editor.Binding{"Ignition": {Key: 'U', HasKey: true}})
+	writeProfile(t, dir, "dst", "f4_key_u.cfg", nil)
+	ts := newServer(t, dir, ServerOpts{})
+
+	req := map[string]any{
+		"sourceProfileId": "src",
+		"controls":        []string{"Ignition"},
+		"profileIds":      []string{"dst"},
+		"force":           false,
+	}
+	resp := postJSON(t, ts, "/api/apply/copy?token="+testToken, req)
+	var out struct {
+		Applied []map[string]any `json:"applied"`
+		Skipped []map[string]any `json:"skipped"`
+	}
+	if err := json.Unmarshal(readBody(t, resp), &out); err != nil {
+		t.Fatal(err)
+	}
+	if len(out.Applied) != 0 || len(out.Skipped) != 1 || out.Skipped[0]["profileId"] != "dst" {
+		t.Fatalf("applied=%+v skipped=%+v, want dst skipped", out.Applied, out.Skipped)
+	}
+
+	req["force"] = true
+	resp = postJSON(t, ts, "/api/apply/copy?token="+testToken, req)
+	out = struct {
+		Applied []map[string]any `json:"applied"`
+		Skipped []map[string]any `json:"skipped"`
+	}{}
+	if err := json.Unmarshal(readBody(t, resp), &out); err != nil {
+		t.Fatal(err)
+	}
+	if len(out.Applied) != 1 || out.Applied[0]["profileId"] != "dst" {
+		t.Fatalf("applied = %+v, want dst applied when forced", out.Applied)
+	}
+}
+
+func TestApplyCopyBlockedWhenSimRunning(t *testing.T) {
+	dir := t.TempDir()
+	writeProfile(t, dir, "src", "f4_key_u.cfg", nil)
+	writeProfile(t, dir, "dst", "f4_btn128.cfg", nil)
+	before, err := os.ReadFile(filepath.Join(dir, "dst", "controls.cfg"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	ts := newServer(t, dir, ServerOpts{SimCheck: func() (bool, error) { return true, nil }})
+
+	req := map[string]any{
+		"sourceProfileId": "src",
+		"controls":        []string{"TractionControlArm"},
+		"profileIds":      []string{"dst"},
+	}
+	resp := postJSON(t, ts, "/api/apply/copy?token="+testToken, req)
+	if resp.StatusCode != http.StatusConflict {
+		t.Fatalf("status = %d, want 409", resp.StatusCode)
+	}
+	after, err := os.ReadFile(filepath.Join(dir, "dst", "controls.cfg"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !bytes.Equal(before, after) {
+		t.Fatal("dst/controls.cfg changed despite sim running")
+	}
+}
+
+func TestApplyCopyRejectsTraversal(t *testing.T) {
+	dir := t.TempDir()
+	writeProfile(t, dir, "src", "f4_key_u.cfg", nil)
+	ts := newServer(t, dir, ServerOpts{})
+
+	req := map[string]any{
+		"sourceProfileId": "src",
+		"controls":        []string{"TractionControlArm"},
+		"profileIds":      []string{".."},
+	}
+	resp := postJSON(t, ts, "/api/apply/copy?token="+testToken, req)
+	if resp.StatusCode != http.StatusBadRequest {
+		t.Fatalf("status = %d, want 400", resp.StatusCode)
+	}
 }
 
 type fakeCapturer struct {

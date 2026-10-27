@@ -33,6 +33,8 @@ func (s *Server) routes() {
 	s.mux.HandleFunc("/api/settings", s.api(s.handleSettings))
 	s.mux.HandleFunc("/api/plan/binding", s.api(s.handlePlanBinding))
 	s.mux.HandleFunc("/api/apply/binding", s.api(s.handleApplyBinding))
+	s.mux.HandleFunc("/api/plan/copy", s.api(s.handlePlanCopy))
+	s.mux.HandleFunc("/api/apply/copy", s.api(s.handleApplyCopy))
 	s.mux.HandleFunc("/api/plan/calib", s.api(s.handlePlanCalib))
 	s.mux.HandleFunc("/api/apply/calib", s.api(s.handleApplyCalib))
 	s.mux.HandleFunc("/api/input/capture", s.api(s.handleInputCapture))
@@ -109,6 +111,7 @@ type controlDTO struct {
 	Kind        string `json:"kind"`
 	Key         string `json:"key"`
 	Button      int    `json:"button"`
+	Buttons     []int  `json:"buttons"`
 	DeviceName  string `json:"deviceName"`
 	AxisName    string `json:"axisName"`
 }
@@ -151,6 +154,10 @@ func (s *Server) handleProfileControls(w http.ResponseWriter, r *http.Request) {
 			Kind:        kindString(rec.Kind),
 			Key:         keyString(rec),
 			Button:      rec.Button,
+			Buttons:     make([]int, 0),
+		}
+		if rec.Kind == cfgparse.KindButton {
+			dto.Buttons = rec.Buttons
 		}
 		if rec.Device != nil {
 			dto.DeviceName = devices[rec.Device.InstanceGUID]
@@ -366,6 +373,134 @@ func (s *Server) handleApplyBinding(w http.ResponseWriter, r *http.Request) {
 			continue
 		}
 		diff := fileops.DiffSummary(fileops.Diff(data, newData))
+		applied = append(applied, appliedItem{ProfileID: id, BackupPath: backupPath, DiffSummary: diff})
+	}
+
+	writeJSON(w, http.StatusOK, map[string]any{"applied": applied, "skipped": skipped})
+}
+
+type copyReq struct {
+	SourceProfileID  string            `json:"sourceProfileId"`
+	Controls         []string          `json:"controls"`
+	ProfileIDs       []string          `json:"profileIds"`
+	Force            bool              `json:"force"`
+	ProfileOverrides []profileOverride `json:"profileOverrides"`
+}
+
+func (r copyReq) forceFor(profileID string) bool {
+	if r.Force {
+		return true
+	}
+	for _, o := range r.ProfileOverrides {
+		if o.ProfileID == profileID && o.Force {
+			return true
+		}
+	}
+	return false
+}
+
+func (s *Server) handlePlanCopy(w http.ResponseWriter, r *http.Request) {
+	var req copyReq
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		http.Error(w, err.Error(), http.StatusBadRequest)
+		return
+	}
+	if !validProfileID(req.SourceProfileID) {
+		http.Error(w, "invalid source profile id", http.StatusBadRequest)
+		return
+	}
+	for _, id := range req.ProfileIDs {
+		if !validProfileID(id) {
+			http.Error(w, "invalid profile id", http.StatusBadRequest)
+			return
+		}
+	}
+	cfg := s.cfg.Load()
+
+	plans := make([]planItem, 0, len(req.ProfileIDs))
+	for _, id := range req.ProfileIDs {
+		force := req.forceFor(id)
+		res, err := ops.PlanCopy(cfg.ProfilesDir, req.SourceProfileID, id, req.Controls, force)
+		if err != nil {
+			http.Error(w, fmt.Sprintf("%s: %v", id, err), http.StatusInternalServerError)
+			return
+		}
+		plans = append(plans, planItem{
+			ProfileID:   id,
+			Conflicts:   res.Conflicts,
+			Warning:     res.Warning,
+			DiffSummary: res.Diff,
+			Force:       force,
+		})
+	}
+	writeJSON(w, http.StatusOK, map[string]any{"plans": plans})
+}
+
+func (s *Server) handleApplyCopy(w http.ResponseWriter, r *http.Request) {
+	var req copyReq
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		http.Error(w, err.Error(), http.StatusBadRequest)
+		return
+	}
+	if !validProfileID(req.SourceProfileID) {
+		http.Error(w, "invalid source profile id", http.StatusBadRequest)
+		return
+	}
+	for _, id := range req.ProfileIDs {
+		if !validProfileID(id) {
+			http.Error(w, "invalid profile id", http.StatusBadRequest)
+			return
+		}
+	}
+	if s.simCheck != nil {
+		running, err := s.simCheck()
+		if err != nil {
+			http.Error(w, err.Error(), http.StatusInternalServerError)
+			return
+		}
+		if running {
+			http.Error(w, simcheck.ErrSimRunning.Error(), http.StatusConflict)
+			return
+		}
+	}
+
+	cfg := s.cfg.Load()
+	applied := []appliedItem{}
+	skipped := []skippedItem{}
+
+	for _, id := range req.ProfileIDs {
+		force := req.forceFor(id)
+		res, err := ops.PlanCopy(cfg.ProfilesDir, req.SourceProfileID, id, req.Controls, force)
+		if err != nil {
+			skipped = append(skipped, skippedItem{ProfileID: id, Reason: err.Error()})
+			continue
+		}
+		if len(res.Conflicts) > 0 && !force {
+			skipped = append(skipped, skippedItem{ProfileID: id, Reason: "binding conflict"})
+			continue
+		}
+
+		cfgPath := filepath.Join(cfg.ProfilesDir, id, "controls.cfg")
+		backupPath, err := fileops.Backup(cfgPath)
+		if err != nil {
+			skipped = append(skipped, skippedItem{ProfileID: id, Reason: err.Error()})
+			continue
+		}
+		old, err := os.ReadFile(cfgPath)
+		if err != nil {
+			skipped = append(skipped, skippedItem{ProfileID: id, Reason: err.Error()})
+			continue
+		}
+		newData, err := ops.ApplyCopy(cfg.ProfilesDir, req.SourceProfileID, id, req.Controls)
+		if err != nil {
+			skipped = append(skipped, skippedItem{ProfileID: id, Reason: err.Error()})
+			continue
+		}
+		if err := fileops.AtomicWrite(cfgPath, newData); err != nil {
+			skipped = append(skipped, skippedItem{ProfileID: id, Reason: err.Error()})
+			continue
+		}
+		diff := fileops.DiffSummary(fileops.Diff(old, newData))
 		applied = append(applied, appliedItem{ProfileID: id, BackupPath: backupPath, DiffSummary: diff})
 	}
 
