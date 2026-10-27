@@ -469,6 +469,10 @@ func (s *Server) handleApplyCopy(w http.ResponseWriter, r *http.Request) {
 	skipped := []skippedItem{}
 
 	for _, id := range req.ProfileIDs {
+		if id == req.SourceProfileID {
+			skipped = append(skipped, skippedItem{ProfileID: id, Reason: "source profile is not a copy target"})
+			continue
+		}
 		force := req.forceFor(id)
 		res, err := ops.PlanCopy(cfg.ProfilesDir, req.SourceProfileID, id, req.Controls, force)
 		if err != nil {
@@ -477,6 +481,10 @@ func (s *Server) handleApplyCopy(w http.ResponseWriter, r *http.Request) {
 		}
 		if len(res.Conflicts) > 0 && !force {
 			skipped = append(skipped, skippedItem{ProfileID: id, Reason: "binding conflict"})
+			continue
+		}
+		if res.Diff == "no changes" {
+			skipped = append(skipped, skippedItem{ProfileID: id, Reason: "no changes to apply"})
 			continue
 		}
 

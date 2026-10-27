@@ -623,6 +623,87 @@ func TestApplyCopyRejectsTraversal(t *testing.T) {
 	}
 }
 
+func TestApplyCopySkipsNoChanges(t *testing.T) {
+	dir := t.TempDir()
+	// Ignition is unbound in f4_key_u.cfg, so copying it is a no-op.
+	writeProfile(t, dir, "src", "f4_key_u.cfg", nil)
+	writeProfile(t, dir, "dst", "f4_key_u.cfg", nil)
+	before, err := os.ReadFile(filepath.Join(dir, "dst", "controls.cfg"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	ts := newServer(t, dir, ServerOpts{})
+
+	req := map[string]any{
+		"sourceProfileId": "src",
+		"controls":        []string{"Ignition"},
+		"profileIds":      []string{"dst"},
+	}
+	resp := postJSON(t, ts, "/api/apply/copy?token="+testToken, req)
+	if resp.StatusCode != http.StatusOK {
+		t.Fatalf("status = %d, want 200 (%s)", resp.StatusCode, readBody(t, resp))
+	}
+	var out struct {
+		Applied []map[string]any `json:"applied"`
+		Skipped []map[string]any `json:"skipped"`
+	}
+	if err := json.Unmarshal(readBody(t, resp), &out); err != nil {
+		t.Fatal(err)
+	}
+	if len(out.Applied) != 0 {
+		t.Fatalf("applied = %+v, want 0 (no-op must not be applied)", out.Applied)
+	}
+	if len(out.Skipped) != 1 || out.Skipped[0]["profileId"] != "dst" {
+		t.Fatalf("skipped = %+v, want exactly dst", out.Skipped)
+	}
+	after, err := os.ReadFile(filepath.Join(dir, "dst", "controls.cfg"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !bytes.Equal(before, after) {
+		t.Fatal("dst/controls.cfg changed for a no-op copy")
+	}
+	entries, err := os.ReadDir(filepath.Join(dir, "dst"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, e := range entries {
+		if matched, _ := filepath.Match("controls.cfg.bak-*", e.Name()); matched {
+			t.Fatalf("unexpected backup %s for a no-op copy", e.Name())
+		}
+	}
+}
+
+func TestApplyCopySkipsSourceProfile(t *testing.T) {
+	dir := t.TempDir()
+	writeProfile(t, dir, "src", "f4_key_u.cfg", nil)
+	writeProfile(t, dir, "dst", "f4_btn128.cfg", nil)
+	ts := newServer(t, dir, ServerOpts{})
+
+	req := map[string]any{
+		"sourceProfileId": "src",
+		"controls":        []string{"TractionControlArm"},
+		"profileIds":      []string{"src", "dst"},
+	}
+	resp := postJSON(t, ts, "/api/apply/copy?token="+testToken, req)
+	if resp.StatusCode != http.StatusOK {
+		t.Fatalf("status = %d, want 200 (%s)", resp.StatusCode, readBody(t, resp))
+	}
+	var out struct {
+		Applied []map[string]any `json:"applied"`
+		Skipped []map[string]any `json:"skipped"`
+	}
+	if err := json.Unmarshal(readBody(t, resp), &out); err != nil {
+		t.Fatal(err)
+	}
+	if len(out.Applied) != 1 || out.Applied[0]["profileId"] != "dst" {
+		t.Fatalf("applied = %+v, want exactly dst", out.Applied)
+	}
+	if len(out.Skipped) != 1 || out.Skipped[0]["profileId"] != "src" {
+		t.Fatalf("skipped = %+v, want exactly src (source excluded)", out.Skipped)
+	}
+}
+
 type fakeCapturer struct {
 	result *inputcap.CaptureResult
 	err    error
