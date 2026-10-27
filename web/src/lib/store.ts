@@ -1,4 +1,4 @@
-import type { BindingReq, ControlDTO, ProfileDTO } from './api';
+import type { BindingReq, ControlDTO, CopyReq, ProfileDTO } from './api';
 
 export type Selection = Record<string, boolean>;
 
@@ -65,15 +65,39 @@ export async function loadControlsByProfile(
   return byProfile;
 }
 
+// buildCopyReq assembles a bulk copy request body.
+export function buildCopyReq(
+  sourceProfileId: string,
+  controls: string[],
+  profileIds: string[],
+  force: boolean,
+  forceOverrides: Record<string, boolean>,
+): CopyReq {
+  return {
+    sourceProfileId,
+    controls,
+    profileIds,
+    force,
+    profileOverrides: buildProfileOverrides(forceOverrides),
+  };
+}
+
+// copyableControl reports whether a control's binding can be copied: keys and
+// button bindings (including multi-button) are copyable; axis/unbound are not.
+export function copyableControl(control: ControlDTO): boolean {
+  return control.kind === 'key' || control.kind === 'button';
+}
+
 // currentBinding renders a control's current binding as human text.
 export function currentBinding(control: ControlDTO): string {
   switch (control.kind) {
     case 'key':
       return `Key ${control.key}`;
-    case 'button':
-      return control.deviceName
-        ? `Btn ${control.button} (${control.deviceName})`
-        : `Btn ${control.button}`;
+    case 'button': {
+      const buttons = (control.buttons ?? []).length > 0 ? control.buttons : [control.button];
+      const label = buttons.join(' + ');
+      return control.deviceName ? `Btn ${label} (${control.deviceName})` : `Btn ${label}`;
+    }
     case 'axis':
       return 'axis';
     default:

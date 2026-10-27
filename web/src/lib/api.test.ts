@@ -79,3 +79,53 @@ describe('api.applyBinding', () => {
     expect(result.skipped[0].profileId).toBe('f5');
   });
 });
+
+describe('api.planCopy / api.applyCopy', () => {
+  test('planCopy POSTs /api/plan/copy and returns a PlanResp', async () => {
+    sessionStorage.setItem('token', 'abc');
+    const raw = {
+      plans: [{ profileId: 'dst', conflicts: [], warning: '', diffSummary: '1 byte changed', force: false }],
+    };
+    globalThis.fetch = vi.fn().mockResolvedValue({
+      ok: true,
+      status: 200,
+      json: async () => raw,
+    });
+
+    const result = await api.planCopy({
+      sourceProfileId: 'src',
+      controls: ['Ignition'],
+      profileIds: ['dst'],
+      force: false,
+      profileOverrides: [],
+    });
+    const url = (globalThis.fetch as ReturnType<typeof vi.fn>).mock.calls[0][0] as string;
+    expect(url).toContain('/api/plan/copy');
+    expect(result.plans).toHaveLength(1);
+    expect(result.plans[0].profileId).toBe('dst');
+  });
+
+  test('applyCopy POSTs /api/apply/copy and returns an ApplyResp', async () => {
+    sessionStorage.setItem('token', 'abc');
+    const raw = {
+      applied: [{ profileId: 'dst', backupPath: '/x.bak', diffSummary: '1 byte changed' }],
+      skipped: [],
+    };
+    globalThis.fetch = vi.fn().mockResolvedValue({
+      ok: true,
+      status: 200,
+      json: async () => raw,
+    });
+
+    const result = await api.applyCopy({
+      sourceProfileId: 'src',
+      controls: ['Ignition'],
+      profileIds: ['dst'],
+      force: false,
+      profileOverrides: [],
+    });
+    const url = (globalThis.fetch as ReturnType<typeof vi.fn>).mock.calls[0][0] as string;
+    expect(url).toContain('/api/apply/copy');
+    expect(result.applied).toHaveLength(1);
+  });
+});
