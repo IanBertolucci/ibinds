@@ -5,16 +5,20 @@
     profiles,
     selected,
     onToggle,
+    source,
   }: {
     profiles: ProfileDTO[];
     selected: Record<string, boolean>;
     onToggle: (id: string) => void;
+    source?: string;
   } = $props();
 
-  let source = $state('');
+  let pickedSource = $state(source ?? '');
   let message = $state('');
 
-  const visible = $derived(profiles.filter((p) => p.id !== source));
+  const fixed = $derived(source !== undefined);
+  const activeSource = $derived(fixed ? source : pickedSource);
+  const visible = $derived(profiles.filter((p) => p.id !== activeSource));
   const targets = $derived(visible.filter((p) => selected[p.id]).map((p) => p.id));
   const allSelected = $derived(visible.length > 0 && visible.every((p) => selected[p.id]));
 
@@ -26,12 +30,12 @@
   }
 
   async function apply() {
-    if (!source) {
+    if (!activeSource) {
       message = 'Pick a source profile.';
       return;
     }
     try {
-      const res = await api.applyCalib({ sourceProfileId: source, profileIds: targets });
+      const res = await api.applyCalib({ sourceProfileId: activeSource, profileIds: targets });
       message = `Calibration copied to ${res.applied.length} profile(s).`;
     } catch (e) {
       message = String(e);
@@ -40,15 +44,17 @@
 </script>
 
 <div class="calib">
-  <label>
-    Source profile
-    <select bind:value={source}>
-      <option value="">Select…</option>
-      {#each profiles as p (p.id)}
-        <option value={p.id}>{p.displayName}</option>
-      {/each}
-    </select>
-  </label>
+  {#if !fixed}
+    <label>
+      Source profile
+      <select bind:value={pickedSource}>
+        <option value="">Select…</option>
+        {#each profiles as p (p.id)}
+          <option value={p.id}>{p.displayName}</option>
+        {/each}
+      </select>
+    </label>
+  {/if}
 
   <p>Targets ({targets.length}):</p>
   <label class="select-all">
