@@ -7,7 +7,7 @@ function jsonResponse(v: unknown) {
 }
 
 async function settle() {
-  for (let i = 0; i < 5; i++) {
+  for (let i = 0; i < 6; i++) {
     await Promise.resolve();
     await new Promise((r) => setTimeout(r, 0));
     await tick();
@@ -20,22 +20,27 @@ const profiles = [
   { id: 'f5', displayName: 'F5', isBaseline: false, hasControls: true, hasCalib: false },
 ];
 
+function controlsFor(id: string) {
+  return [
+    {
+      name: 'BrakeBiasInc',
+      displayName: 'Brake Bias Inc',
+      kind: 'button',
+      key: '',
+      button: id === 'f4' ? 5 : 7,
+      buttons: [id === 'f4' ? 5 : 7],
+      deviceName: '',
+      axisName: '',
+    },
+  ];
+}
+
 function mockApi() {
   globalThis.fetch = vi.fn(async (input: RequestInfo | URL) => {
     const url = String(input);
     if (url.startsWith('/api/profiles/')) {
       const id = decodeURIComponent(url.split('/')[3].split('?')[0]);
-      return jsonResponse([
-        {
-          name: 'BrakeBiasInc',
-          displayName: 'Brake Bias Inc',
-          kind: 'button',
-          key: '',
-          button: id === 'f4' ? 5 : 7,
-          deviceName: '',
-          axisName: '',
-        },
-      ]);
+      return jsonResponse(controlsFor(id));
     }
     if (url.startsWith('/api/profiles')) return jsonResponse(profiles);
     if (url.startsWith('/api/input/devices')) return jsonResponse([]);
@@ -52,54 +57,79 @@ async function setupApp() {
   return { target, app };
 }
 
-describe('App control selection', () => {
-  test('shows the current binding for every profile, selected or not', async () => {
+describe('App profile navigation', () => {
+  test('sidebar lists all profiles and selecting one shows its controls', async () => {
     const { target, app } = await setupApp();
 
-    const select = target.querySelector('select') as HTMLSelectElement;
-    select.value = 'BrakeBiasInc';
-    select.dispatchEvent(new Event('change', { bubbles: true }));
+    const sidebarButtons = [...target.querySelectorAll('aside .sidebar button')];
+    expect(sidebarButtons.map((b) => b.textContent?.trim())).toEqual([
+      'Baseline (baseline)',
+      'F4',
+      'F5',
+    ]);
+
+    const f4 = sidebarButtons.find((b) => b.textContent?.includes('F4')) as HTMLButtonElement;
+    f4.click();
     await settle();
 
-    const current = [...target.querySelectorAll('.profile-list .current')].map((n) => n.textContent?.trim());
-    expect(current).toEqual(['Btn 7', 'Btn 5', 'Btn 7']);
+    const binding = target.textContent ?? '';
+    expect(binding).toContain('Btn 5');
+
+    unmount(app);
+    target.remove();
+  });
+
+  test('New binding opens the wizard', async () => {
+    const { target, app } = await setupApp();
+
+    const newBinding = [...target.querySelectorAll('button')].find((b) =>
+      b.textContent?.trim() === 'New binding',
+    ) as HTMLButtonElement;
+    newBinding.click();
+    await settle();
+
+    expect(target.textContent).toContain('Capture key');
+
+    unmount(app);
+    target.remove();
+  });
+
+  test('Edit on a control opens the wizard preset with that control', async () => {
+    const { target, app } = await setupApp();
+
+    const edit = [...target.querySelectorAll('button')].find((b) => b.textContent?.trim() === 'Edit');
+    (edit as HTMLButtonElement).click();
+    await settle();
+
+    const select = target.querySelector('.modal select') as HTMLSelectElement;
+    expect(select.value).toBe('BrakeBiasInc');
 
     unmount(app);
     target.remove();
   });
 });
 
-describe('App calibration targets', () => {
-  test('toggle all clears and restores every target', async () => {
+describe('App calibration tab', () => {
+  test('calibration copy excludes the active profile from targets', async () => {
     const { target, app } = await setupApp();
 
-    const calibTab = [...target.querySelectorAll('nav button')].find(
+    const f4 = [...target.querySelectorAll('aside .sidebar button')].find((b) =>
+      b.textContent?.includes('F4'),
+    ) as HTMLButtonElement;
+    f4.click();
+    await settle();
+
+    const calibTab = [...target.querySelectorAll('.profile-page nav button')].find(
       (b) => b.textContent?.trim() === 'Calibration',
     ) as HTMLButtonElement;
     calibTab.click();
     await settle();
 
-    const targetBoxes = () =>
-      [...target.querySelectorAll('.calib label:not(.select-all) input')] as HTMLInputElement[];
-    const selectAll = target.querySelector('.calib label.select-all input') as HTMLInputElement;
-    const targetCount = () =>
-      [...target.querySelectorAll('.calib p')].find((p) => p.textContent?.startsWith('Targets'))?.textContent;
-
-    expect(targetBoxes().map((b) => b.checked)).toEqual([true, true, true]);
-    expect(targetCount()).toBe('Targets (3):');
-
-    selectAll.click();
-    await settle();
-    expect(targetBoxes().map((b) => b.checked)).toEqual([false, false, false]);
-    expect(targetCount()).toBe('Targets (0):');
-
-    selectAll.click();
-    await settle();
-    expect(targetBoxes().map((b) => b.checked)).toEqual([true, true, true]);
-    expect(targetCount()).toBe('Targets (3):');
+    const labels = [...target.querySelectorAll('.calib label')].map((l) => l.textContent ?? '');
+    expect(labels.some((l) => l.includes('Baseline'))).toBe(true);
+    expect(labels.some((l) => l.includes('F4'))).toBe(false);
 
     unmount(app);
     target.remove();
   });
 });
-
