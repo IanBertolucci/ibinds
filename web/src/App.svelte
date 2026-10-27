@@ -11,6 +11,7 @@
     type PlanResp,
     type ProfileDTO,
   } from './lib/api';
+  import { loadControlsByProfile } from './lib/store';
 
   let profiles = $state<ProfileDTO[]>([]);
   let selected = $state<Record<string, boolean>>({});
@@ -50,15 +51,7 @@
 
   async function onControl(name: string) {
     controlName = name;
-    controlsByProfile = {};
-    for (const p of profiles) {
-      if (!selected[p.id]) continue;
-      try {
-        controlsByProfile[p.id] = await api.fetchControls(p.id);
-      } catch {
-        /* ignore per-profile fetch errors */
-      }
-    }
+    controlsByProfile = await loadControlsByProfile(profiles, api.fetchControls);
   }
 
   function toggle(id: string) {

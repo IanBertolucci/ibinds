@@ -58,6 +58,15 @@ func configPath() (string, error) {
 	return filepath.Join(dir, "ibinds", "config.json"), nil
 }
 
+// LogPath returns the default log file location next to the config file.
+func LogPath() (string, error) {
+	p, err := configPath()
+	if err != nil {
+		return "", err
+	}
+	return filepath.Join(filepath.Dir(p), "ibinds.log"), nil
+}
+
 func loadFile() (*Config, error) {
 	p, err := configPath()
 	if err != nil {

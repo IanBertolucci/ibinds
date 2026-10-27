@@ -42,11 +42,17 @@ CLI flags:
 --port PORT         port to listen on (default: 0 = ephemeral)
 --capture           capture a button press and exit (DirectInput test)
 --no-browser        do not open the browser on startup
+--log FILE          log file path (default: user config dir/ibinds/ibinds.log)
 ```
 
 The profiles directory is resolved in this order: `--dir` flag,
 `IBINDS_PROFILES_DIR` environment variable, the saved config file, or the
 default `Documents/iRacing/profiles/controls`.
+
+Logs go to stderr and the log file (on Windows,
+`%APPDATA%\ibinds\ibinds.log`). Each API request is logged with method, path,
+status, duration, and the error body for 4xx/5xx; the session token is never
+logged.
 
 ## Development
 
@@ -72,6 +78,14 @@ cd web && npx vitest run # frontend unit tests
 ```
 
 ## Build
+
+From Linux or WSL (no Windows shell needed):
+
+```bash
+./build.sh    # builds web/ then cross-compiles ibinds.exe
+```
+
+On Windows PowerShell:
 
 ```powershell
 .\build.ps1   # produces ibinds.exe (builds web/ then the Go binary)

@@ -506,9 +506,11 @@ func (s *Server) handleInputCapture(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if result == nil {
+		s.logger.Printf("input capture: timeout")
 		w.WriteHeader(http.StatusNoContent)
 		return
 	}
+	s.logger.Printf("input capture: button=%d device=%s pov=%v", result.Button, result.DeviceInstanceGUID, result.RawPOV)
 	writeJSON(w, http.StatusOK, result)
 }
 

@@ -2,10 +2,11 @@ import { describe, test, expect } from 'vitest';
 import {
   buildBindingReq,
   currentBinding,
+  loadControlsByProfile,
   selectAll,
   toggleSelection,
 } from './store';
-import type { ControlDTO } from './api';
+import type { ControlDTO, ProfileDTO } from './api';
 
 function control(partial: Partial<ControlDTO>): ControlDTO {
   return {
@@ -36,6 +37,40 @@ describe('buildBindingReq', () => {
     });
     expect(req.force).toBe(false);
     expect(req.profileOverrides).toEqual([{ profileId: 'f4', force: true }]);
+  });
+});
+
+describe('loadControlsByProfile', () => {
+  function profile(id: string, hasControls = true): ProfileDTO {
+    return { id, displayName: id, isBaseline: false, hasControls, hasCalib: false };
+  }
+
+  test('loads controls for every profile, not only selected ones', async () => {
+    const calls: string[] = [];
+    const result = await loadControlsByProfile(
+      [profile('f4'), profile('f5'), profile('f6')],
+      async (id) => {
+        calls.push(id);
+        return [control({ name: 'Ignition', kind: 'button', button: 5 })];
+      },
+    );
+
+    expect(calls.sort()).toEqual(['f4', 'f5', 'f6']);
+    expect(result.f4[0].button).toBe(5);
+    expect(result.f5[0].button).toBe(5);
+    expect(result.f6[0].button).toBe(5);
+  });
+
+  test('is independent of hasControls and ignores fetch failures', async () => {
+    const result = await loadControlsByProfile(
+      [profile('has'), profile('missing', false), profile('broken')],
+      async (id) => {
+        if (id === 'broken') throw new Error('boom');
+        return [control({ name: 'Ignition', kind: 'key', key: 'U' })];
+      },
+    );
+
+    expect(Object.keys(result)).toEqual(['has', 'missing']);
   });
 });
 

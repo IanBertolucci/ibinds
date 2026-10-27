@@ -113,6 +113,20 @@ not exercised on the author's machine at the time of writing — see the manual
 validation note in the plan's Task 9.
 
 - The device `InstanceGUID` string is rendered from `DIDEVICEINSTANCE.guidInstance`.
+- **POV hats are not DirectInput buttons.** iRacing exposes the four possible
+  hats as virtual buttons `128..159`, eight directions per hat, starting at
+  up and going clockwise (`128` = hat 0 up, `129` = hat 0 up-right, ...,
+  `135` = hat 0 up-left, `136` = hat 1 up). `inputcap` applies the same
+  mapping so a captured stick direction produces the same button index
+  iRacing uses. The MOZA R9, for example, reports 128 physical buttons and
+  one POV hat.
+- The hand-built `DIDATAFORMAT` declares the 128 button objects and four POV
+  objects. Each object must use `DIDFT_OPTIONAL` with `DIDFT_ANYINSTANCE`
+  (button GUID is NULL; POV uses `GUID_POV`), otherwise `SetDataFormat`
+  fails with `E_INVALIDARG`.
+- Capture triggers on a rising edge relative to the state sampled when it
+  starts, so a button or stick held before capture is not captured until
+  released and pressed again.
 - The `ProductGUID` string is derived from `DIDEVCAPS.dwProductId` as
   `{<pid:08X>-0000-0000-0000-504944564944}` (the trailing `504944564944` is
   `"PIDVID"` hex). This matches the real `joyCalib.yaml` ProductGUID

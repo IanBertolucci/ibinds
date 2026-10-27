@@ -14,7 +14,16 @@
   let source = $state('');
   let message = $state('');
 
-  const targets = $derived(Object.entries(selected).filter(([, v]) => v).map(([id]) => id));
+  const visible = $derived(profiles.filter((p) => p.id !== source));
+  const targets = $derived(visible.filter((p) => selected[p.id]).map((p) => p.id));
+  const allSelected = $derived(visible.length > 0 && visible.every((p) => selected[p.id]));
+
+  function toggleAll() {
+    const next = !allSelected;
+    for (const p of visible) {
+      if (Boolean(selected[p.id]) !== next) onToggle(p.id);
+    }
+  }
 
   async function apply() {
     if (!source) {
@@ -42,13 +51,15 @@
   </label>
 
   <p>Targets ({targets.length}):</p>
-  {#each profiles as p (p.id)}
-    {#if p.id !== source}
-      <label>
-        <input type="checkbox" checked={selected[p.id]} onchange={() => onToggle(p.id)} />
-        {p.displayName}
-      </label>
-    {/if}
+  <label class="select-all">
+    <input type="checkbox" checked={allSelected} onchange={toggleAll} />
+    All targets
+  </label>
+  {#each visible as p (p.id)}
+    <label>
+      <input type="checkbox" checked={selected[p.id]} onchange={() => onToggle(p.id)} />
+      {p.displayName}
+    </label>
   {/each}
 
   <button onclick={apply}>Copy calibration</button>
@@ -60,5 +71,8 @@
     display: flex;
     flex-direction: column;
     gap: 0.5rem;
+  }
+  .select-all {
+    font-weight: bold;
   }
 </style>

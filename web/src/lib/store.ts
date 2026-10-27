@@ -1,4 +1,4 @@
-import type { BindingReq, ControlDTO } from './api';
+import type { BindingReq, ControlDTO, ProfileDTO } from './api';
 
 export type Selection = Record<string, boolean>;
 
@@ -39,6 +39,30 @@ export function buildBindingReq(
     force,
     profileOverrides: buildProfileOverrides(forceOverrides),
   };
+}
+
+// loadControlsByProfile fetches the control list for every profile. It
+// deliberately ignores both the selection state and hasControls: the UI must
+// show each profile's current binding regardless of whether the profile is
+// selected, and a failed/absent controls.cfg is simply skipped.
+export async function loadControlsByProfile(
+  profiles: ProfileDTO[],
+  fetchControls: (profileId: string) => Promise<ControlDTO[]>,
+): Promise<Record<string, ControlDTO[]>> {
+  const results = await Promise.all(
+    profiles.map(async (p): Promise<[string, ControlDTO[]] | null> => {
+      try {
+        return [p.id, await fetchControls(p.id)];
+      } catch {
+        return null;
+      }
+    }),
+  );
+  const byProfile: Record<string, ControlDTO[]> = {};
+  for (const entry of results) {
+    if (entry) byProfile[entry[0]] = entry[1];
+  }
+  return byProfile;
 }
 
 // currentBinding renders a control's current binding as human text.
