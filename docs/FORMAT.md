@@ -57,14 +57,18 @@ type-dependent; offsets below are relative to its start (`PayloadStart`).
 | Offset | Size | Meaning |
 |---|---|---|
 | `+0` | 4 | flags (observed `1` or `0`; not required for editing) |
-| `+4` | 4 | category (`6` = digital, `25` = steering axis, `31` = analog, `57` = level; not required for editing) |
+| `+4` | 4 | binding category (`6` = digital, `25` = steering axis, `31` = analog, `57` = level; not required for editing) |
 | `+8` | 4 | **binding type**: `0` = unbound, `1` = axis, `2` = button, `4` = key |
-| `+12` | 20 | union: key byte (`+12`, for key) **or** five 32-bit button mask words `+12..+31` (buttons 0..159) |
+| `+12` | 20 | union: key code (`+12`, uint32; modifier mask at `+16`, unused by iBinds) **or** five 32-bit button mask words `+12..+31` (buttons 0..159) |
 | `+32` | 4 | reserved (observed `0`) |
 | `+36` | 16 | InstanceGUID (button/axis records) |
 | `+52` | 4 | ProductID (button records) |
 | `+56` | 6 | reserved (observed `0`) |
 | `+62` | 6 | `PIDVID` literal (`50 49 44 56 49 44`) for button records |
+
+The `+4` value is the binding kind/level category, **not** the in-game UI
+section (Cockpit, Brakes, …) used by the controls list; UI categories come from
+`internal/labels`.
 
 ### Binding types
 
@@ -73,7 +77,7 @@ type-dependent; offsets below are relative to its start (`PayloadStart`).
 - `0` → unbound
 - `1` → axis (steering/throttle/brake/clutch — read-only in v1)
 - `2` → button
-- `4` → key (ASCII byte at `+12`)
+- `4` → key (iRacing key code at `+12`; see below)
 
 ### Keyboard key codes
 
@@ -99,7 +103,11 @@ iRacing's published default shortcuts:
 
 The numpad values were derived from the stock replay bindings (for example
 `RpyToStart` = Numpad 7 and `RpyFrameRew` = Numpad 4), which match iRacing's
-documented defaults. Display mapping lives in `internal/labels` (`Key`).
+documented defaults. The key value is a 32-bit iRacing code at `+12`; iBinds
+currently reads the low byte. The next uint32 at `+16` holds modifier bits
+(observed `0x30000` Shift, `0xC0000` Ctrl, `0x300000` Alt); modifiers are not
+displayed or edited yet. Display mapping lives in `internal/labels` (`Key`),
+which falls back to printable ASCII and then `0xNN` for unknown codes.
 
 ### Button bitmask
 
