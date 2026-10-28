@@ -24,8 +24,13 @@ npx vitest run                          # frontend unit tests
 npm run build                           # outputs web/dist (committed + embedded)
 
 ./build.sh                              # from Linux/WSL -> ibinds.exe (no Windows shell)
+VERSION=v0.1.0 ./build.sh               # optional version metadata
 .\build.ps1                             # full Windows build -> ibinds.exe
+.\build.ps1 -Version v0.1.0             # optional version metadata
 ```
+
+Release builds are produced by `.github/workflows/release.yml` on `v*` tags;
+see `docs/RELEASING.md`.
 
 `build.sh` finds Go via `$PATH` or `~/.local/go/bin/go` (override with
 `GO_BIN=/path/to/go`). If a copy already exists at `%USERPROFILE%\ibinds.exe`
@@ -138,8 +143,9 @@ the tests to match reality (the fixtures win over any assumption).
 
 - DirectInput capture compiles for Windows but the button-index conversion
   vs iRacing's "Dev N Btn M" has not been validated on hardware.
-- Friendly car-name map (`internal/labels`) only has `f4` and
-  `Low Fuel Accept`; the rest fall back to their technical slug.
+- Friendly car-name map (`internal/labels`) only has `f4`; control names
+  are curated from the in-game list in `internal/labels/control_labels.go`,
+  and unmapped controls fall back to their technical id.
 - Device enumeration falls back to the profiles' `joyCalib.yaml` on
   non-Windows (button count unknown/0).
 

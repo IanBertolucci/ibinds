@@ -57,6 +57,15 @@ describe('ProfilePage', () => {
     target.remove();
   });
 
+  test('header shows the control and bound counts', () => {
+    const { target, app } = mountPage();
+    const text = target.textContent ?? '';
+    expect(text).toContain('2 controls');
+    expect(text).toContain('2 bound');
+    unmount(app);
+    target.remove();
+  });
+
   test('calibration tab shows CalibCopy', async () => {
     const { target, app } = mountPage();
     const calibTab = [...target.querySelectorAll('nav button')].find((b) =>

@@ -11,7 +11,7 @@ if [ -z "$GO_BIN" ]; then
   elif [ -x "$HOME/.local/go/bin/go" ]; then
     GO_BIN="$HOME/.local/go/bin/go"
   else
-    echo "error: go not found; install Go 1.22+ or set GO_BIN" >&2
+    echo "error: go not found; install Go 1.27+ or set GO_BIN" >&2
     exit 1
   fi
 fi
@@ -31,7 +31,12 @@ popd >/dev/null
 
 echo "==> Cross-compiling ibinds.exe for Windows"
 OUT="${OUT:-ibinds.exe}"
-GOOS=windows GOARCH=amd64 "$GO_BIN" build -ldflags "-s -w" -o "$OUT" ./cmd/ibinds
+VERSION="${VERSION:-dev}"
+COMMIT="$(git rev-parse --short HEAD 2>/dev/null || echo none)"
+BUILD_DATE="$(date -u +%Y-%m-%d)"
+GOOS=windows GOARCH=amd64 "$GO_BIN" build -trimpath \
+  -ldflags "-s -w -X main.version=${VERSION} -X main.commit=${COMMIT} -X main.buildDate=${BUILD_DATE}" \
+  -o "$OUT" ./cmd/ibinds
 
 # If the user keeps a copy of the exe in their Windows home (e.g. the one they
 # double-click), refresh it too so no manual copy is needed.

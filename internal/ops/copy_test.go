@@ -116,6 +116,30 @@ func TestSourceRecordMissing(t *testing.T) {
 	}
 }
 
+func TestPlanCopyFromSourceReturnsExactBytes(t *testing.T) {
+	profDir := t.TempDir()
+	writeProfile(t, profDir, "src", "f4_key_u.cfg", nil)
+	writeProfile(t, profDir, "dst", "f4_btn128.cfg", nil)
+
+	src, err := LoadCopySource(profDir, "src")
+	if err != nil {
+		t.Fatalf("LoadCopySource: %v", err)
+	}
+	res, err := PlanCopyFromSource(src, profDir, "dst", []string{"TractionControlArm"}, false)
+	if err != nil {
+		t.Fatalf("PlanCopyFromSource: %v", err)
+	}
+	if !bytes.Equal(res.Old, readFixture(t, "f4_btn128.cfg")) {
+		t.Fatalf("Old is not the target's original bytes")
+	}
+	if !bytes.Equal(res.New, readFixture(t, "f4_key_u.cfg")) {
+		t.Fatalf("New is not the copied target's bytes")
+	}
+	if res.Diff == "no changes" {
+		t.Fatalf("Diff = %q, want actual changes", res.Diff)
+	}
+}
+
 func TestPlanCopyKeyDiff(t *testing.T) {
 	profDir := t.TempDir()
 	writeProfile(t, profDir, "src", "f4_key_u.cfg", nil)

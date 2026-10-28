@@ -19,6 +19,16 @@ import (
 
 const maxLogSize = 5 << 20
 
+var (
+	version   = "dev"
+	commit    = "none"
+	buildDate = "unknown"
+)
+
+func versionString() string {
+	return fmt.Sprintf("ibinds %s (%s, %s)", version, commit, buildDate)
+}
+
 func main() {
 	dir := flag.String("dir", "", "override the iRacing profiles directory")
 	listProfiles := flag.Bool("list-profiles", false, "list detected profiles and exit")
@@ -27,7 +37,13 @@ func main() {
 	capture := flag.Bool("capture", false, "capture a button press and exit")
 	noBrowser := flag.Bool("no-browser", false, "do not open the browser on startup")
 	logPath := flag.String("log", "", "log file path (default: <user config dir>/ibinds/ibinds.log)")
+	showVersion := flag.Bool("version", false, "print version and exit")
 	flag.Parse()
+
+	if *showVersion {
+		fmt.Println(versionString())
+		return
+	}
 
 	logger, closeLog, logFile := openLogger(*logPath)
 	defer closeLog()
@@ -40,7 +56,7 @@ func main() {
 		fmt.Fprintln(os.Stderr, "error:", err)
 		os.Exit(1)
 	}
-	logger.Printf("iBinds starting: profiles=%s log=%s", cfg.ProfilesDir, logFile)
+	logger.Printf("iBinds starting: %s profiles=%s log=%s", versionString(), cfg.ProfilesDir, logFile)
 
 	if *listProfiles {
 		ps, err := profiles.Scan(cfg.ProfilesDir)

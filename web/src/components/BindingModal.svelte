@@ -1,7 +1,9 @@
 <script lang="ts">
+  import { untrack } from 'svelte';
   import ProfileList from './ProfileList.svelte';
   import BindingWizard from './BindingWizard.svelte';
   import PreviewModal from './PreviewModal.svelte';
+  import Icon from './Icon.svelte';
   import {
     api,
     type BindingInput,
@@ -10,6 +12,7 @@
     type ProfileDTO,
   } from '../lib/api';
   import { loadControlsByProfile } from '../lib/store';
+  import { focusTrap } from '../lib/focusTrap';
 
   let {
     profiles,
@@ -24,9 +27,9 @@
   } = $props();
 
   let selected = $state<Record<string, boolean>>(
-    Object.fromEntries(profiles.map((p) => [p.id, true])),
+    untrack(() => Object.fromEntries(profiles.map((p) => [p.id, true]))),
   );
-  let controlName = $state(presetControl);
+  let controlName = $state(untrack(() => presetControl));
   let controlsByProfile = $state<Record<string, ControlDTO[]>>({});
   let binding = $state<BindingInput>({});
   let plan = $state<PlanResp | null>(null);
@@ -37,11 +40,13 @@
 
   async function onControl(name: string) {
     controlName = name;
+    plan = null;
     controlsByProfile = await loadControlsByProfile(profiles, api.fetchControls);
   }
 
   function toggle(id: string) {
     selected = { ...selected, [id]: !selected[id] };
+    plan = null;
   }
 
   function toggleAll() {
@@ -49,13 +54,17 @@
     const sel: Record<string, boolean> = {};
     for (const p of profiles) sel[p.id] = !all;
     selected = sel;
+    plan = null;
   }
 
   function onBinding(b: BindingInput) {
     binding = b;
+    plan = null;
   }
 
   async function onPlan() {
+    error = '';
+    message = '';
     const ids = Object.entries(selected)
       .filter(([, v]) => v)
       .map(([id]) => id);
@@ -75,6 +84,7 @@
   }
 
   async function onApply() {
+    error = '';
     const ids = Object.entries(selected)
       .filter(([, v]) => v)
       .map(([id]) => id);
@@ -102,87 +112,121 @@
   });
 </script>
 
-<div class="overlay">
-  <div class="modal">
-  <div class="header">
-    <h2>New binding</h2>
-    <button onclick={onClose}>Close</button>
-  </div>
+<div
+  class="overlay"
+  role="presentation"
+  onclick={(e) => e.target === e.currentTarget && onClose()}
+>
+  <div
+    class="modal binding-modal"
+    use:focusTrap={onClose}
+    tabindex="-1"
+    role="dialog"
+    aria-modal="true"
+    aria-labelledby="binding-title"
+  >
+    <div class="modal-header">
+      <div>
+        <h2 id="binding-title">{presetControl ? 'Edit binding' : 'New binding'}</h2>
+        <p class="modal-sub">
+          {presetControl
+            ? 'Update the selected control or switch to another one, then preview the changes.'
+            : 'Choose a control, assign a key or button, and preview the changes.'}
+        </p>
+      </div>
+      <button class="icon-btn" aria-label="Close binding dialog" onclick={onClose}>
+        <Icon name="close" />
+      </button>
+    </div>
 
-  {#if error}<p class="error">{error}</p>{/if}
-  {#if message}<p class="ok">{message}</p>{/if}
+    <div class="modal-body">
+      {#if error}<div class="banner banner-error" role="alert">{error}</div>{/if}
+      {#if message}<div class="banner banner-ok">{message}</div>{/if}
 
-  <div class="layout">
-    <section>
-      <h3>Profiles</h3>
-      <ProfileList
-        {profiles}
-        {selected}
-        {controlName}
-        {controlsByProfile}
-        onToggle={toggle}
-        onToggleAll={toggleAll}
-      />
-    </section>
-    <section>
-      <BindingWizard
-        {controls}
-        {controlName}
-        {binding}
-        onControl={onControl}
-        onBinding={onBinding}
-        onPlan={onPlan}
-      />
-    </section>
-  </div>
+      <div class="binding-layout">
+        <section class="panel">
+          <div class="panel-head">
+            <h3>Profiles</h3>
+            <span class="badge">current binding</span>
+          </div>
+          <ProfileList
+            {profiles}
+            {selected}
+            {controlName}
+            {controlsByProfile}
+            onToggle={toggle}
+            onToggleAll={toggleAll}
+          />
+        </section>
 
-  {#if plan}
-    <PreviewModal
-      {plan}
-      {force}
-      {forceOverrides}
-      onForce={(v) => (force = v)}
-      onForceOverride={(id, v) => (forceOverrides = { ...forceOverrides, [id]: v })}
-      onApply={onApply}
-      onCancel={() => (plan = null)}
-    />
-  {/if}
+        <section class="panel">
+          <div class="panel-head">
+            <h3>Binding</h3>
+            <span class="badge badge-accent">new value</span>
+          </div>
+          <BindingWizard
+            {controls}
+            {controlName}
+            {binding}
+            onControl={onControl}
+            onBinding={onBinding}
+            onPlan={onPlan}
+          />
+        </section>
+      </div>
+
+      {#if plan}
+        <PreviewModal
+          {plan}
+          {force}
+          {forceOverrides}
+          onForce={(v) => (force = v)}
+          onForceOverride={(id, v) => (forceOverrides = { ...forceOverrides, [id]: v })}
+          onApply={onApply}
+          onCancel={() => (plan = null)}
+        />
+      {/if}
+    </div>
   </div>
 </div>
 
 <style>
-  .overlay {
-    position: fixed;
-    inset: 0;
-    background: rgba(0, 0, 0, 0.4);
-    display: flex;
-    align-items: flex-start;
-    justify-content: center;
-    padding: 2rem 1rem;
-    overflow-y: auto;
-    z-index: 100;
+  .binding-modal {
+    max-width: 72rem;
   }
-  .modal {
-    background: #fff;
-    border: 1px solid #ccc;
-    padding: 1rem;
-    max-width: 70rem;
-    width: 100%;
+  .modal-sub {
+    margin-top: 0.1rem;
+    color: var(--muted);
+    font-size: 0.78rem;
   }
-  .header {
-    display: flex;
-    justify-content: space-between;
-    align-items: center;
-  }
-  .layout {
+  .binding-layout {
     display: grid;
-    grid-template-columns: 1fr 1fr;
-    gap: 2rem;
+    grid-template-columns: minmax(0, 1fr) minmax(0, 1.15fr);
+    gap: 1rem;
   }
-  .error {
-    color: #b00;
+  .panel {
+    display: flex;
+    flex-direction: column;
+    gap: 0.6rem;
+    min-width: 0;
+    padding: 0.8rem;
+    border: 1px solid var(--border);
+    border-radius: var(--radius-sm);
+    background: var(--surface-2);
   }
-  .ok {
-    color: #080;
+  .panel-head {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 0.5rem;
+  }
+  .panel-head h3 {
+    font-size: 0.9rem;
+    font-weight: 700;
+  }
+  @media (max-width: 860px) {
+    .binding-layout {
+      grid-template-columns: 1fr;
+    }
   }
 </style>

@@ -49,6 +49,7 @@ describe('BindingModal', () => {
     });
     await settle();
 
+    expect(target.querySelector('[role="dialog"]')).toBeTruthy();
     const select = target.querySelector('select') as HTMLSelectElement;
     expect(select.value).toBe('Ignition');
 

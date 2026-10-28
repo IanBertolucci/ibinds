@@ -157,7 +157,7 @@ func (s *Server) handleProfileControls(w http.ResponseWriter, r *http.Request) {
 			Buttons:     make([]int, 0),
 		}
 		if rec.Kind == cfgparse.KindButton {
-			dto.Buttons = rec.Buttons
+			dto.Buttons = append([]int{}, rec.Buttons...)
 		}
 		if rec.Device != nil {
 			dto.DeviceName = devices[rec.Device.InstanceGUID]
@@ -416,11 +416,16 @@ func (s *Server) handlePlanCopy(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 	cfg := s.cfg.Load()
+	src, err := ops.LoadCopySource(cfg.ProfilesDir, req.SourceProfileID)
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusBadRequest)
+		return
+	}
 
 	plans := make([]planItem, 0, len(req.ProfileIDs))
 	for _, id := range req.ProfileIDs {
 		force := req.forceFor(id)
-		res, err := ops.PlanCopy(cfg.ProfilesDir, req.SourceProfileID, id, req.Controls, force)
+		res, err := ops.PlanCopyFromSource(src, cfg.ProfilesDir, id, req.Controls, force)
 		if err != nil {
 			http.Error(w, fmt.Sprintf("%s: %v", id, err), http.StatusInternalServerError)
 			return
@@ -465,6 +470,11 @@ func (s *Server) handleApplyCopy(w http.ResponseWriter, r *http.Request) {
 	}
 
 	cfg := s.cfg.Load()
+	src, err := ops.LoadCopySource(cfg.ProfilesDir, req.SourceProfileID)
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusBadRequest)
+		return
+	}
 	applied := []appliedItem{}
 	skipped := []skippedItem{}
 
@@ -474,7 +484,7 @@ func (s *Server) handleApplyCopy(w http.ResponseWriter, r *http.Request) {
 			continue
 		}
 		force := req.forceFor(id)
-		res, err := ops.PlanCopy(cfg.ProfilesDir, req.SourceProfileID, id, req.Controls, force)
+		res, err := ops.PlanCopyFromSource(src, cfg.ProfilesDir, id, req.Controls, force)
 		if err != nil {
 			skipped = append(skipped, skippedItem{ProfileID: id, Reason: err.Error()})
 			continue
@@ -494,22 +504,11 @@ func (s *Server) handleApplyCopy(w http.ResponseWriter, r *http.Request) {
 			skipped = append(skipped, skippedItem{ProfileID: id, Reason: err.Error()})
 			continue
 		}
-		old, err := os.ReadFile(cfgPath)
-		if err != nil {
+		if err := fileops.AtomicWrite(cfgPath, res.New); err != nil {
 			skipped = append(skipped, skippedItem{ProfileID: id, Reason: err.Error()})
 			continue
 		}
-		newData, err := ops.ApplyCopy(cfg.ProfilesDir, req.SourceProfileID, id, req.Controls)
-		if err != nil {
-			skipped = append(skipped, skippedItem{ProfileID: id, Reason: err.Error()})
-			continue
-		}
-		if err := fileops.AtomicWrite(cfgPath, newData); err != nil {
-			skipped = append(skipped, skippedItem{ProfileID: id, Reason: err.Error()})
-			continue
-		}
-		diff := fileops.DiffSummary(fileops.Diff(old, newData))
-		applied = append(applied, appliedItem{ProfileID: id, BackupPath: backupPath, DiffSummary: diff})
+		applied = append(applied, appliedItem{ProfileID: id, BackupPath: backupPath, DiffSummary: res.Diff})
 	}
 
 	writeJSON(w, http.StatusOK, map[string]any{"applied": applied, "skipped": skipped})

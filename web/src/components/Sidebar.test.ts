@@ -1,5 +1,5 @@
 import { describe, test, expect, vi } from 'vitest';
-import { mount, unmount } from 'svelte';
+import { mount, tick, unmount } from 'svelte';
 import Sidebar from './Sidebar.svelte';
 import type { ProfileDTO } from '../lib/api';
 
@@ -44,6 +44,19 @@ describe('Sidebar', () => {
     const { target, app } = mountSidebar({ activeId: 'f4' });
     const f4 = [...target.querySelectorAll('button')].find((b) => b.textContent?.includes('F4'));
     expect(f4?.className).toContain('active');
+    unmount(app);
+    target.remove();
+  });
+
+  test('search filters profiles by name or id', async () => {
+    const { target, app } = mountSidebar();
+    const input = target.querySelector('input[type="search"]') as HTMLInputElement;
+    input.value = 'f4';
+    input.dispatchEvent(new Event('input', { bubbles: true }));
+    await tick();
+    const items = [...target.querySelectorAll('.profile-button')];
+    expect(items).toHaveLength(1);
+    expect(items[0].textContent).toContain('F4');
     unmount(app);
     target.remove();
   });

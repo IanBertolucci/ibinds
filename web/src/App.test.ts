@@ -72,7 +72,7 @@ describe('App profile navigation', () => {
     f4.click();
     await settle();
 
-    const binding = target.textContent ?? '';
+    const binding = (target.textContent ?? '').replace(/\s+/g, ' ');
     expect(binding).toContain('Btn 5');
 
     unmount(app);
@@ -89,6 +89,21 @@ describe('App profile navigation', () => {
     await settle();
 
     expect(target.textContent).toContain('Capture key');
+
+    unmount(app);
+    target.remove();
+  });
+
+  test('settings gear opens the profiles directory dialog', async () => {
+    const { target, app } = await setupApp();
+
+    const gear = target.querySelector('button[aria-label="Settings"]') as HTMLButtonElement;
+    gear.click();
+    await settle();
+
+    expect(target.querySelector('[role="dialog"]')).toBeTruthy();
+    expect(target.textContent).toContain('Profiles directory');
+    expect(target.querySelector('input[aria-label="Profiles directory"]')).toBeTruthy();
 
     unmount(app);
     target.remove();
@@ -128,6 +143,12 @@ describe('App calibration tab', () => {
     const labels = [...target.querySelectorAll('.calib label')].map((l) => l.textContent ?? '');
     expect(labels.some((l) => l.includes('Baseline'))).toBe(true);
     expect(labels.some((l) => l.includes('F4'))).toBe(false);
+
+    const targetChecks = [
+      ...target.querySelectorAll('.target-row input[type=checkbox]'),
+    ] as HTMLInputElement[];
+    expect(targetChecks).toHaveLength(2);
+    expect(targetChecks.every((b) => b.checked)).toBe(true);
 
     unmount(app);
     target.remove();

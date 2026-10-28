@@ -475,6 +475,95 @@ func TestControlsListButtonsEmptyForKey(t *testing.T) {
 	}
 }
 
+func TestControlsListButtonsEmptyForDegenerateButton(t *testing.T) {
+	dir := setupProfilesDir(t, map[string]string{"f4": "f4_btn130.cfg"})
+	cfgPath := filepath.Join(dir, "f4", "controls.cfg")
+	data, err := os.ReadFile(cfgPath)
+	if err != nil {
+		t.Fatal(err)
+	}
+	f, err := cfgparse.Parse(data)
+	if err != nil {
+		t.Fatal(err)
+	}
+	for i := range f.Records {
+		if f.Records[i].Name != "TractionControlArm" {
+			continue
+		}
+		mask := data[f.Records[i].PayloadStart+cfgparse.MaskWordsOffset:]
+		for j := 0; j < cfgparse.MaskWordCount*4; j++ {
+			mask[j] = 0
+		}
+	}
+	if err := os.WriteFile(cfgPath, data, 0o644); err != nil {
+		t.Fatal(err)
+	}
+	ts := newServer(t, dir, ServerOpts{})
+
+	resp := get(t, ts, "/api/profiles/f4/controls?token="+testToken)
+	var controls []map[string]any
+	if err := json.Unmarshal(readBody(t, resp), &controls); err != nil {
+		t.Fatal(err)
+	}
+	tca := findControl(controls, "TractionControlArm")
+	if tca == nil {
+		t.Fatal("TractionControlArm not found")
+	}
+	buttons, ok := tca["buttons"].([]any)
+	if !ok || len(buttons) != 0 {
+		t.Fatalf("buttons = %v, want [] (never null)", tca["buttons"])
+	}
+}
+
+func TestPlanCopyMissingSourceControlsReturns4xx(t *testing.T) {
+	dir := t.TempDir()
+	writeProfile(t, dir, "dst", "f4_btn128.cfg", nil)
+	if err := os.MkdirAll(filepath.Join(dir, "src"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	ts := newServer(t, dir, ServerOpts{})
+
+	req := map[string]any{
+		"sourceProfileId": "src",
+		"controls":        []string{"TractionControlArm"},
+		"profileIds":      []string{"dst"},
+	}
+	resp := postJSON(t, ts, "/api/plan/copy?token="+testToken, req)
+	if resp.StatusCode != http.StatusBadRequest {
+		t.Fatalf("status = %d, want 400 (%s)", resp.StatusCode, readBody(t, resp))
+	}
+}
+
+func TestApplyCopyMissingSourceControlsReturns4xx(t *testing.T) {
+	dir := t.TempDir()
+	writeProfile(t, dir, "dst", "f4_btn128.cfg", nil)
+	if err := os.MkdirAll(filepath.Join(dir, "src"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	before, err := os.ReadFile(filepath.Join(dir, "dst", "controls.cfg"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	ts := newServer(t, dir, ServerOpts{})
+
+	req := map[string]any{
+		"sourceProfileId": "src",
+		"controls":        []string{"TractionControlArm"},
+		"profileIds":      []string{"dst"},
+	}
+	resp := postJSON(t, ts, "/api/apply/copy?token="+testToken, req)
+	if resp.StatusCode != http.StatusBadRequest {
+		t.Fatalf("status = %d, want 400 (%s)", resp.StatusCode, readBody(t, resp))
+	}
+	after, err := os.ReadFile(filepath.Join(dir, "dst", "controls.cfg"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !bytes.Equal(before, after) {
+		t.Fatal("dst/controls.cfg changed despite missing source")
+	}
+}
+
 func TestPlanCopyReturnsPlans(t *testing.T) {
 	dir := t.TempDir()
 	writeProfile(t, dir, "src", "f4_key_u.cfg", nil)

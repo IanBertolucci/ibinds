@@ -45,6 +45,7 @@ describe('CopyModal', () => {
 
   test('source profile is not listed as a target', () => {
     const { target, app } = mountModal();
+    expect(target.querySelector('[role="dialog"]')).toBeTruthy();
     const labels = [...target.querySelectorAll('label')].map((l) => l.textContent ?? '');
     const hasF4 = labels.some((l) => l.includes('F4'));
     expect(hasF4).toBe(false);
