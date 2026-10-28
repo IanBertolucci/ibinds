@@ -8,6 +8,10 @@ control profiles — without opening the simulator. It reads the local
 `Documents/iRacing/profiles/controls/`, applies surgical edits to only the
 target record's fields, and keeps everything else byte-for-byte intact.
 
+<p align="center">
+  <img src="docs/images/main-screen.png" alt="iBinds main screen with the profile sidebar, controls table, and current bindings" width="1200">
+</p>
+
 ## Motivation
 
 iRacing stores control bindings in a baseline profile and in per-car profiles.
