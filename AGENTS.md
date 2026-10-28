@@ -13,6 +13,8 @@ write, and exposes a local HTTP API.
 
 ## Commands
 
+Requirements: Go 1.27.2+ (see `go.mod`) and Node.js 20.19+ (or 22.12+).
+
 ```bash
 go test ./...                          # backend unit tests (run on Linux)
 GOOS=windows GOARCH=amd64 go build ./...  # verify Windows-only code compiles
@@ -45,7 +47,8 @@ Run locally: `go run ./cmd/ibinds --token dev --port 8791` (backend) +
 
 Every run logs to stderr and appends to `%APPDATA%\ibinds\ibinds.log`
 (Windows) or `$XDG_CONFIG_HOME/ibinds/ibinds.log` (Linux); override with
-`--log PATH`. Each API request is one line: method, path, status, duration,
+`--log PATH`. The log rotates at 5 MB to `ibinds.log.old`. Each API request is
+one line: method, path, status, duration,
 and the error body for 4xx/5xx. Query strings (session token) are never
 logged. From WSL, read the Windows log at
 `/mnt/c/Users/<user>/AppData/Roaming/ibinds/ibinds.log`; this is the fastest
@@ -63,7 +66,8 @@ way to see a failure the user reports.
 | `internal/fileops` | timestamped backup, byte diff, atomic write |
 | `internal/inputcap` | DirectInput button capture (Windows) + enumeration |
 | `internal/simcheck` | iRacing process check |
-| `internal/config`, `internal/profiles`, `internal/labels` | config, profile scan, friendly names |
+| `internal/config`, `internal/profiles` | config persistence, profile scan |
+| `internal/labels` | friendly names, key labels, in-game category groups |
 
 Windows-only code is isolated behind `//go:build windows` with a matching
 stub for other platforms, so tests run on Linux.
@@ -76,6 +80,10 @@ parser/editor. It was reverse-engineered from **real fixtures**
 the tests assert byte-exact reproduction of the simulator's own edits. Do NOT
 guess the format; if a fixture reveals a new structure, update FORMAT.md and
 the tests to match reality (the fixtures win over any assumption).
+
+Keyboard codes are iRacing's own `Key` enum, not ASCII or Windows virtual-key
+codes; see the key-code table in FORMAT.md. `internal/labels.Key` is the display
+mapping used by the API.
 
 ## Invariants (do not violate)
 
@@ -99,9 +107,30 @@ the tests to match reality (the fixtures win over any assumption).
   may bind **multiple** buttons (`Record.Buttons`); `Record.Button` is the
   lowest one.
 - **The parser walks records as `name + NUL + 68-byte fixed region`** from a
-  `LRTC` chunk marker; the binding type is a uint32 at `+8`, key byte at `+12`,
-  five 32-bit button-mask words at `+12..+31`, GUID at `+36`, ProductID at
-  `+52`, `PIDVID` at `+62` (see FORMAT.md).
+  `LRTC` chunk marker; the binding type is a uint32 at `+8`, key code at `+12`
+  (low byte read by iBinds; modifiers at `+16`), five 32-bit button-mask words
+  at `+12..+31`, GUID at `+36`, ProductID at `+52`, `PIDVID` at `+62` (see
+  FORMAT.md).
+- **The control list follows the in-game section order, not file order.**
+  `labels.ControlGroupFor(name)` supplies `Category`, `Subcategory`, and
+  `Order`; the API exposes `category`/`subcategory` and sorts by `Order`.
+  Category/subcategory dividers and section search depend on this. Unknown
+  controls fall back to `Other` and sort last.
+- **Special keys are iRacing key codes, not ASCII.** Use `labels.Key(code)`
+  for display (F1–F12, numpad, Pause, Print Screen, punctuation, etc.);
+  unknown non-printables render as `0xNN`, never a replacement character.
+- **Default device is persisted in config.** `Config.DefaultDeviceInstanceGUID`
+  is read/written by `GET/POST /api/settings`; a POST without the field
+  preserves the current value. The binding wizard preselects it, falling back
+  to the first device if it is not connected.
+- **Edit vs New binding profile selection.** Editing a control from a profile
+  preselects only that profile; the global "New binding" preselects all.
+- **Desktop layout is viewport-height with internal scrolling.** At >=1101px,
+  `main` is `height:100vh`/`overflow:hidden`, the layout row is
+  `minmax(0,1fr)`, and the sidebar and controls table scroll internally so the
+  "Copy selected" footer stays visible. Do not reintroduce page-level scroll.
+- **Search matches sections too.** `ControlsTable` filters on name, display
+  name, category, and subcategory; keep category search working.
 - **Test fixtures are committed real files.** Don't replace them with
   synthetic guesses.
 - **Per-profile current bindings load for every profile.** The home screen
@@ -148,10 +177,14 @@ the tests to match reality (the fixtures win over any assumption).
   and unmapped controls fall back to their technical id.
 - Device enumeration falls back to the profiles' `joyCalib.yaml` on
   non-Windows (button count unknown/0).
+- `internal/labels/control_categories.go` and `keys.go` are snapshots of the
+  in-game controls list/key codes captured in Oct 2026. Unknown controls fall
+  back to `Other`/technical id; unknown non-printable keys render as hex.
 
 ## Process
 
 New features should follow a fresh brainstorming → spec → plan cycle (the
 superpowers workflow), with the plan citing `docs/FORMAT.md` as the format
-authority and this file for the invariants. All code, comments, docs, and
-commit messages are in English.
+authority and this file for the invariants. Small fixes and bug fixes should
+still be test-driven and scoped to the behavior being changed; they do not need
+a new spec/plan. All code, comments, docs, and commit messages are in English.

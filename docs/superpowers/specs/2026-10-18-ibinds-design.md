@@ -1,7 +1,7 @@
 # iBinds — Design
 
 Date: 2026-10-18
-Status: awaiting final approval (builder check)
+Status: implemented (see `README.md` and `AGENTS.md` for current behavior)
 
 ## 1. Intent and why
 
