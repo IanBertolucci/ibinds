@@ -105,9 +105,9 @@ jobs:
 
             1. Download `ibinds.exe`.
             2. Verify the SHA-256 checksum against `SHA256SUMS.txt`.
-            3. Run `ibinds.exe`. It starts a local server and opens the UI in your browser.
+            3. Run `ibinds.exe`. It starts a local server and opens the UI in your browser. If the browser does not open, use the URL printed in the terminal.
 
-            iBinds is portable: it needs no installer and no administrator rights. It only reads and writes the iRacing profiles folder on your machine.
+            iBinds is portable: it needs no installer and no administrator rights. It only modifies the iRacing profiles folder and its own settings/log files under `%APPDATA%\ibinds` (on Linux, `$XDG_CONFIG_HOME/ibinds`).
 
             ## Verify the download
 
@@ -122,11 +122,11 @@ jobs:
             gh attestation verify .\ibinds.exe --repo IanBertolucci/ibinds
             ```
 
-            Windows SmartScreen may warn because the binary is not code-signed. Do not disable SmartScreen. Verify the checksum and the source before running, or build it yourself.
+            Windows SmartScreen may warn because the binary is not code-signed. Do not disable SmartScreen. Verify the checksum and the source before running, or build it yourself. If Windows shows "Windows protected your PC", choose **More info → Run anyway** only after the checksum matches.
 
             ## Build from source
 
-            Download the source zip below (or clone the tag), install Go 1.27+ and Node.js 20+, and run:
+            Download the source zip below (or clone the tag), install Go 1.27.2+ and Node.js 20.19+ (or 22.12+), and run:
 
             ```powershell
             powershell -NoProfile -ExecutionPolicy Bypass -File .\build.ps1
@@ -136,7 +136,7 @@ jobs:
 
             ## Source
 
-            The source archive for this tag is available under **Source code (zip)** below.
+            The source archives for this tag are available under **Source code (zip)** and **Source code (tar.gz)** below.
           files: |
             ibinds.exe
             SHA256SUMS.txt
