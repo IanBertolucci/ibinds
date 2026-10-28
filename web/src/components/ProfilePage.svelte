@@ -20,6 +20,7 @@
   let search = $state('');
   let selectedControls = $state<Record<string, boolean>>({});
   let copyOpen = $state(false);
+  let hint = $state('');
 
   // Calibration targets, keyed by profile id, defaulting to all except source.
   let selectedProfiles = $state<Record<string, boolean>>(
@@ -45,6 +46,15 @@
   function toggleProfile(id: string) {
     selectedProfiles = { ...selectedProfiles, [id]: !selectedProfiles[id] };
   }
+
+  function copySelected() {
+    if (selectedNames.length === 0) {
+      hint = 'Select at least one control to copy.';
+      return;
+    }
+    hint = '';
+    copyOpen = true;
+  }
 </script>
 
 <div class="profile-page">
@@ -64,8 +74,9 @@
       onToggle={toggleControl}
       onToggleAll={toggleAllControls}
       onEdit={onEditControl}
-      onCopySelected={() => (copyOpen = true)}
+      onCopySelected={copySelected}
     />
+    {#if hint}<p class="hint">{hint}</p>{/if}
   {:else}
     <CalibCopy
       {profiles}
@@ -97,5 +108,8 @@
   }
   button.active {
     font-weight: bold;
+  }
+  .hint {
+    color: #a70;
   }
 </style>

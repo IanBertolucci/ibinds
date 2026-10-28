@@ -102,7 +102,8 @@
   });
 </script>
 
-<div class="modal">
+<div class="overlay">
+  <div class="modal">
   <div class="header">
     <h2>New binding</h2>
     <button onclick={onClose}>Close</button>
@@ -146,12 +147,27 @@
       onCancel={() => (plan = null)}
     />
   {/if}
+  </div>
 </div>
 
 <style>
+  .overlay {
+    position: fixed;
+    inset: 0;
+    background: rgba(0, 0, 0, 0.4);
+    display: flex;
+    align-items: flex-start;
+    justify-content: center;
+    padding: 2rem 1rem;
+    overflow-y: auto;
+    z-index: 100;
+  }
   .modal {
+    background: #fff;
     border: 1px solid #ccc;
     padding: 1rem;
+    max-width: 70rem;
+    width: 100%;
   }
   .header {
     display: flex;

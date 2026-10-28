@@ -63,7 +63,8 @@
   }
 </script>
 
-<div class="modal">
+<div class="overlay">
+  <div class="modal">
   <h2>Copy bindings</h2>
   <p class="subtitle">Copying {controls.length} control(s) from {sourceId}.</p>
 
@@ -116,15 +117,30 @@
       <button onclick={apply}>Apply</button>
     {/if}
   </div>
+  </div>
 </div>
 
 <style>
+  .overlay {
+    position: fixed;
+    inset: 0;
+    background: rgba(0, 0, 0, 0.4);
+    display: flex;
+    align-items: flex-start;
+    justify-content: center;
+    padding: 2rem 1rem;
+    overflow-y: auto;
+    z-index: 100;
+  }
   .modal {
+    background: #fff;
     border: 1px solid #ccc;
     padding: 1rem;
     display: flex;
     flex-direction: column;
     gap: 0.5rem;
+    max-width: 40rem;
+    width: 100%;
   }
   .select-all {
     font-weight: bold;

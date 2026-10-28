@@ -95,4 +95,17 @@ describe('ProfilePage', () => {
     unmount(app);
     target.remove();
   });
+
+  test('copy selected with nothing selected shows a hint instead of silently doing nothing', async () => {
+    const { target, app } = mountPage();
+    const copyBtn = [...target.querySelectorAll('button')].find((b) =>
+      b.textContent?.trim().includes('Copy selected'),
+    ) as HTMLButtonElement;
+    copyBtn.click();
+    await settle();
+    expect(target.textContent).toContain('Select at least one control');
+    expect(target.textContent).not.toContain('Copy bindings');
+    unmount(app);
+    target.remove();
+  });
 });

@@ -76,7 +76,7 @@
 
   <div class="footer">
     <span>{selectedCount} selected</span>
-    <button onclick={onCopySelected} disabled={selectedCount === 0}>Copy selected →</button>
+    <button onclick={onCopySelected}>Copy selected →</button>
   </div>
 </div>
 
