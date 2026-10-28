@@ -259,6 +259,32 @@ func TestPlanCopyWarnsDeviceMissing(t *testing.T) {
 	}
 }
 
+func TestApplyCopyOldFormatTargetPreservesTrailingBytes(t *testing.T) {
+	profDir := t.TempDir()
+	writeProfile(t, profDir, "src", "f4_key_u.cfg", nil)
+	// The old-format file has 2 trailing bytes after its record region; the
+	// copy must reproduce them byte-for-byte.
+	writeProfile(t, profDir, "dst", "audigto_oldfmt.cfg", nil)
+
+	out, err := ApplyCopy(profDir, "src", "dst", []string{"TractionControlArm"})
+	if err != nil {
+		t.Fatalf("ApplyCopy: %v", err)
+	}
+	want := readFixture(t, "audigto_oldfmt.cfg")
+	if len(out) != len(want) {
+		t.Fatalf("len(out) = %d, want %d", len(out), len(want))
+	}
+	if out[len(out)-1] != 0x20 || out[len(out)-2] != 0x20 {
+		t.Fatalf("trailing bytes = % x, want 20 20", out[len(out)-2:])
+	}
+	// The only changed bytes are the TractionControlArm record; everything
+	// else (including the trailing bytes) is identical to the source target.
+	got := parse(t, out)
+	if len(got.Records) != 367 {
+		t.Fatalf("len(Records) = %d, want 367", len(got.Records))
+	}
+}
+
 func slicesEq(a, b []int) bool {
 	if len(a) != len(b) {
 		return false

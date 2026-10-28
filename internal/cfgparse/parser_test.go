@@ -52,6 +52,28 @@ func TestParseRejectsTruncated(t *testing.T) {
 	}
 }
 
+func TestParseOldFormatTrailingBytes(t *testing.T) {
+	// audigto_oldfmt.cfg is an older-format file (367 records) whose records
+	// region is followed by 2 trailing bytes; the parser must bound the record
+	// walk by the chunk size, not by EOF.
+	f, err := Parse(loadFixture(t, "audigto_oldfmt.cfg"))
+	if err != nil {
+		t.Fatalf("Parse: %v", err)
+	}
+	if len(f.Records) != 367 {
+		t.Fatalf("len(Records) = %d, want 367", len(f.Records))
+	}
+	// The file ends with two trailing 0x20 bytes after the last record.
+	last := f.Records[len(f.Records)-1]
+	lastEnd := last.Offset + len(last.Opaque)
+	if lastEnd != len(f.Raw)-2 {
+		t.Fatalf("last record ends at %d, want %d (2 trailing bytes)", lastEnd, len(f.Raw)-2)
+	}
+	if f.Raw[lastEnd] != 0x20 || f.Raw[lastEnd+1] != 0x20 {
+		t.Fatalf("trailing bytes = % x, want 20 20", f.Raw[lastEnd:])
+	}
+}
+
 func TestParseRealBtn130(t *testing.T) {
 	f := parseFixture(t, "f4_btn130.cfg")
 	r := findRecord(t, f, "TractionControlArm")

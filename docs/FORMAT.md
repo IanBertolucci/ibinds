@@ -12,6 +12,7 @@ are the source of truth; this document records what the bytes actually say.
 | `f4_btn128.cfg` | Btn 128 (MOZA R9 Base) | mask word `01 00 00 00` (only byte differing from btn130 is at `0xbe0`) |
 | `f4_key_u.cfg` | key `U` | type `04`, key byte `55` at `0xbd0` |
 | `f4_btn130.cfg` vs `f4_btn128.cfg` vs `f4_key_u.cfg` | — | all three are 30584 bytes; they differ only in the `TractionControlArm` record |
+| `audigto_oldfmt.cfg` | — | 30412 bytes, 367 records, 2 trailing `0x20` bytes after the record region |
 
 `f4_key_u.cfg` is byte-identical to the author's current live
 `f4/controls.cfg` (the profile was left at key `U` after re-snapshotting).
@@ -27,8 +28,15 @@ and `Ignition` (unbound) are all still exercised by `f4_key_u.cfg`.
 | `0x4` | 4 | `14 00 00 00` (version, observed `0x14`) |
 | `0x8` | 4 | size field = `len(file) - 12` |
 | `0x9f` | 4 | chunk magic `LRTC` (`4c 52 54 43`, i.e. `"CTRL"` reversed) |
-| `0xa3` | 8 | chunk header (`08 00 00 00` + `cd 76 00 00` = `0x76cd`), not yet fully decoded |
+| `0xa3` | 8 | chunk header (`08 00 00 00` + a uint32 chunk size) |
 | `0xab` | — | records begin (12 bytes after the `LRTC` magic) |
+
+The chunk header's second uint32 (`0xa7`, little-endian) is the **byte size of
+the record region**. Records are walked from `0xab` to `0xab + chunkSize`,
+*not* to EOF. Most files have `chunkSize == len - 0xab` (no trailing bytes),
+but older-format profiles (e.g. `audigto_oldfmt.cfg`, 367 records) carry 2
+trailing `0x20` bytes after the record region; the parser preserves them
+byte-for-byte and the writer never touches them.
 
 ## Record framing
 
