@@ -40,7 +40,7 @@
         {p.displayName}{p.isBaseline ? ' (baseline)' : ''}
       </span>
       {#if controlName}
-        <span class="current">{current(p)}</span>
+        <span class="current mono">{current(p)}</span>
       {/if}
     </label>
   {/each}
@@ -50,23 +50,38 @@
   .profile-list {
     display: flex;
     flex-direction: column;
-    gap: 0.25rem;
+    gap: 0.2rem;
     max-height: 40vh;
     overflow-y: auto;
   }
   .row {
     display: flex;
     align-items: center;
-    gap: 0.5rem;
+    gap: 0.45rem;
+    padding: 0.35rem 0.4rem;
+    border-radius: 6px;
+    font-size: 0.82rem;
+  }
+  .row:hover {
+    background: var(--surface-2);
   }
   .select-all {
-    font-weight: bold;
+    margin-bottom: 0.15rem;
+    border-bottom: 1px solid var(--border);
+    border-radius: 0;
+    color: var(--muted);
+    font-weight: 700;
   }
   .baseline {
-    font-weight: bold;
+    color: var(--accent-ink);
+    font-weight: 700;
   }
   .current {
-    color: #888;
     margin-left: auto;
+    color: var(--faint);
+    font-size: 0.72rem;
+  }
+  input[type="checkbox"] {
+    accent-color: var(--accent);
   }
 </style>

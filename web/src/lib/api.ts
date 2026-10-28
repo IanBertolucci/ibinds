@@ -12,6 +12,7 @@ export interface ControlDTO {
   kind: string;
   key: string;
   button: number;
+  buttons: number[];
   deviceName: string;
   axisName: string;
 }
@@ -75,6 +76,14 @@ export interface CaptureResp {
 export interface CalibReq {
   sourceProfileId: string;
   profileIds: string[];
+}
+
+export interface CopyReq {
+  sourceProfileId: string;
+  controls: string[];
+  profileIds: string[];
+  force: boolean;
+  profileOverrides: { profileId: string; force: boolean }[];
 }
 
 // initToken resolves the session token from a query string: an explicit
@@ -141,6 +150,8 @@ export const api = {
     request<ControlDTO[]>('GET', `/api/profiles/${encodeURIComponent(profileId)}/controls`),
   planBinding: (req: BindingReq) => request<PlanResp>('POST', '/api/plan/binding', req),
   applyBinding: (req: BindingReq) => request<ApplyResp>('POST', '/api/apply/binding', req),
+  planCopy: (req: CopyReq) => request<PlanResp>('POST', '/api/plan/copy', req),
+  applyCopy: (req: CopyReq) => request<ApplyResp>('POST', '/api/apply/copy', req),
   planCalib: (req: CalibReq) => request<PlanResp>('POST', '/api/plan/calib', req),
   applyCalib: (req: CalibReq) => request<ApplyResp>('POST', '/api/apply/calib', req),
   fetchInputDevices: () => request<DeviceInfo[]>('GET', '/api/input/devices'),

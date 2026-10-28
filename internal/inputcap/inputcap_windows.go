@@ -18,7 +18,8 @@ import (
 var (
 	dinput8                = syscall.NewLazyDLL("dinput8.dll")
 	procDirectInput8Create = dinput8.NewProc("DirectInput8Create")
-	procCdfDIJoystick2     = dinput8.NewProc("c_dfDIJoystick2")
+	kernel32               = windows.NewLazySystemDLL("kernel32.dll")
+	procGetConsoleWindow   = kernel32.NewProc("GetConsoleWindow")
 )
 
 const (
@@ -28,12 +29,13 @@ const (
 	diSCLBackground     = 0x00000008
 	diSCLNonExclusive   = 0x00000001
 	diOK                = 0
+	sFalse              = 1
 	diEnumContinue      = 1
 )
 
 var (
-	iidIDirectInput8 = windows.GUID{0xBF798030, 0x483A, 0x4DA2, [8]byte{0xAA, 0x99, 0x5D, 0x64, 0xED, 0x36, 0x97, 0x00}}
-	guidSysJoystick  = windows.GUID{0x6F1D2B70, 0xD5A0, 0x11CF, [8]byte{0xBF, 0xC7, 0x44, 0x45, 0x53, 0x54, 0x00, 0x00}}
+	iidIDirectInput8W = windows.GUID{0xBF798031, 0x483A, 0x4DA2, [8]byte{0xAA, 0x99, 0x5D, 0x64, 0xED, 0x36, 0x97, 0x00}}
+	guidSysJoystick   = windows.GUID{0x6F1D2B70, 0xD5A0, 0x11CF, [8]byte{0xBF, 0xC7, 0x44, 0x45, 0x53, 0x54, 0x00, 0x00}}
 )
 
 type iDirectInput8Vtbl struct {
@@ -203,6 +205,55 @@ type diDataFormat struct {
 	rgodf      uintptr
 }
 
+// dioObjectDataFormat mirrors DIOBJECTDATAFORMAT.
+type dioObjectDataFormat struct {
+	pguid   *windows.GUID
+	dwOfs   uint32
+	dwType  uint32
+	dwFlags uint32
+}
+
+const (
+	didfAbsAxis      = 0x00000001
+	didftPOV         = 0x00000010
+	didftButton      = 0x0000000C
+	didftAnyInstance = 0x00FFFF00
+	didftOptional    = 0x80000000
+)
+
+var (
+	guidPOV = windows.GUID{0xA36D02F2, 0xC9F3, 0x11CF, [8]byte{0xBF, 0xC7, 0x44, 0x45, 0x53, 0x54, 0x00, 0x00}}
+	joyObjs = func() [128 + 4]dioObjectDataFormat {
+		var objs [128 + 4]dioObjectDataFormat
+		buttonBase := uint32(unsafe.Offsetof(diJoyState2{}.rgbButtons))
+		for i := 0; i < 128; i++ {
+			objs[i] = dioObjectDataFormat{
+				dwOfs:  buttonBase + uint32(i),
+				dwType: didftOptional | didftButton | didftAnyInstance,
+			}
+		}
+		povBase := uint32(unsafe.Offsetof(diJoyState2{}.rgdwPOV))
+		for i := 0; i < 4; i++ {
+			objs[128+i] = dioObjectDataFormat{
+				pguid:  &guidPOV,
+				dwOfs:  povBase + uint32(i)*4,
+				dwType: didftOptional | didftPOV | didftAnyInstance,
+			}
+		}
+		return objs
+	}()
+	// c_dfDIJoystick2 lives in dinput8.lib, not dinput8.dll, so build the
+	// equivalent DIDATAFORMAT ourselves. Only buttons and POVs are captured.
+	joyStateFormat = diDataFormat{
+		dwSize:     uint32(unsafe.Sizeof(diDataFormat{})),
+		dwObjSize:  uint32(unsafe.Sizeof(dioObjectDataFormat{})),
+		dwFlags:    didfAbsAxis,
+		dwDataSize: uint32(unsafe.Sizeof(diJoyState2{})),
+		dwNumObjs:  uint32(len(joyObjs)),
+		rgodf:      uintptr(unsafe.Pointer(&joyObjs[0])),
+	}
+)
+
 var (
 	enumMu        sync.Mutex
 	enumInstances []diDeviceInstance
@@ -223,12 +274,28 @@ func New() Capturer {
 	return directInputCapturer{}
 }
 
+// cooperativeWindow returns the HWND DirectInput should associate with the
+// device. SetCooperativeLevel rejects a NULL handle; a console app can use its
+// console window.
+func cooperativeWindow() uintptr {
+	if h, _, _ := procGetConsoleWindow.Call(); h != 0 {
+		return h
+	}
+	// No console (for example, launched from WSL): fall back to the desktop
+	// shell window, which is always a valid top-level HWND.
+	return uintptr(windows.GetShellWindow())
+}
+
 func createInput() (*iDirectInput8, error) {
+	var hinst windows.Handle
+	if err := windows.GetModuleHandleEx(0, nil, &hinst); err != nil {
+		return nil, fmt.Errorf("inputcap: GetModuleHandleEx failed: %w", err)
+	}
 	var p uintptr
 	r1, _, _ := procDirectInput8Create.Call(
-		0,
+		uintptr(hinst),
 		directInputVersion,
-		uintptr(unsafe.Pointer(&iidIDirectInput8)),
+		uintptr(unsafe.Pointer(&iidIDirectInput8W)),
 		uintptr(unsafe.Pointer(&p)),
 		0,
 	)
@@ -272,7 +339,11 @@ func Enumerate() ([]DeviceInfo, error) {
 			ProductGUID:  formatProductGUID(uint32(inst.guidProduct.Data1)),
 		}
 		if dev, err := openDevice(inst); err == nil {
-			info.ButtonCount = deviceButtonCount(dev)
+			if caps, ok := readCaps(dev); ok {
+				info.ButtonCount = int(caps.dwButtons)
+				info.POVCount = int(caps.dwPOVs)
+				info.AxisCount = int(caps.dwAxes)
+			}
 			dev.Release()
 		}
 		out = append(out, info)
@@ -309,13 +380,13 @@ func (d *iDirectInputDevice8) Poll() uintptr {
 	return r1
 }
 
-func deviceButtonCount(dev *iDirectInputDevice8) int {
+func readCaps(dev *iDirectInputDevice8) (diDevCaps, bool) {
 	var caps diDevCaps
 	caps.dwSize = uint32(unsafe.Sizeof(caps))
 	if hr := dev.GetCapabilities(uintptr(unsafe.Pointer(&caps))); hr != diOK {
-		return 0
+		return caps, false
 	}
-	return int(caps.dwButtons)
+	return caps, true
 }
 
 // Capture polls all joysticks until a button is pressed or the timeout
@@ -330,25 +401,36 @@ func (directInputCapturer) Capture(opts CaptureOpts) (*CaptureResult, error) {
 	}
 
 	type open struct {
-		inst *diDeviceInstance
-		dev  *iDirectInputDevice8
+		inst     *diDeviceInstance
+		dev      *iDirectInputDevice8
+		prev     diJoyState2
+		havePrev bool
 	}
 	devs := make([]open, 0, len(instances))
+	var lastErr error
 	for i := range instances {
 		inst := &instances[i]
 		dev, err := openDevice(inst)
 		if err != nil {
+			lastErr = err
 			continue
 		}
-		if hr := dev.SetDataFormat(procCdfDIJoystick2.Addr()); hr != diOK {
+		if hr := dev.SetDataFormat(uintptr(unsafe.Pointer(&joyStateFormat))); hr != diOK {
+			lastErr = fmt.Errorf("SetDataFormat failed: 0x%x", hr)
+			dev.Release()
 			continue
 		}
-		if hr := dev.SetCooperativeLevel(0, diSCLBackground|diSCLNonExclusive); hr != diOK {
+		if hr := dev.SetCooperativeLevel(cooperativeWindow(), diSCLBackground|diSCLNonExclusive); hr != diOK {
+			lastErr = fmt.Errorf("SetCooperativeLevel failed: 0x%x", hr)
+			dev.Release()
 			continue
 		}
 		devs = append(devs, open{inst: inst, dev: dev})
 	}
 	if len(devs) == 0 {
+		if lastErr != nil {
+			return nil, fmt.Errorf("inputcap: no usable device: %w", lastErr)
+		}
 		return nil, ErrUnsupported
 	}
 	defer func() {
@@ -359,24 +441,52 @@ func (directInputCapturer) Capture(opts CaptureOpts) (*CaptureResult, error) {
 
 	deadline := time.Now().Add(opts.timeout())
 	for {
-		for _, d := range devs {
+		for idx := range devs {
+			d := &devs[idx]
 			var state diJoyState2
-			if d.dev.Acquire() != diOK {
+			// Acquire returns S_FALSE when the device is already acquired.
+			if hr := d.dev.Acquire(); hr != diOK && hr != sFalse {
 				continue
 			}
 			d.dev.Poll()
 			if hr := d.dev.GetDeviceState(uint32(unsafe.Sizeof(state)), uintptr(unsafe.Pointer(&state))); hr != diOK {
 				continue
 			}
+			// Require a transition from the state sampled when capture began,
+			// so a held button or a POV resting off-center is not captured
+			// immediately.
+			if !d.havePrev {
+				d.prev = state
+				d.havePrev = true
+				continue
+			}
+			prev := &d.prev
 			for i, b := range state.rgbButtons {
-				if b&0x80 != 0 {
+				if b&0x80 != 0 && prev.rgbButtons[i]&0x80 == 0 {
 					return &CaptureResult{
 						Button:             i,
 						DeviceInstanceGUID: formatGUID(d.inst.guidInstance),
 						ProductGUID:        formatProductGUID(uint32(d.inst.guidProduct.Data1)),
+						RawPOV:             state.rgdwPOV,
 					}, nil
 				}
 			}
+			for hat, pov := range state.rgdwPOV {
+				btn, ok := povButton(hat, pov)
+				if !ok {
+					continue
+				}
+				prevBtn, prevOK := povButton(hat, prev.rgdwPOV[hat])
+				if !prevOK || prevBtn != btn {
+					return &CaptureResult{
+						Button:             btn,
+						DeviceInstanceGUID: formatGUID(d.inst.guidInstance),
+						ProductGUID:        formatProductGUID(uint32(d.inst.guidProduct.Data1)),
+						RawPOV:             state.rgdwPOV,
+					}, nil
+				}
+			}
+			d.prev = state
 		}
 		if time.Now().After(deadline) {
 			return nil, nil

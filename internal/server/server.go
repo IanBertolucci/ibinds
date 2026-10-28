@@ -3,6 +3,7 @@ package server
 import (
 	"crypto/rand"
 	"encoding/hex"
+	"log"
 	"net/http"
 	"sync/atomic"
 
@@ -15,6 +16,7 @@ type ServerOpts struct {
 	Token         string
 	SimCheck      func() (bool, error)
 	InputCapturer inputcap.Capturer
+	Logger        *log.Logger
 }
 
 // Server holds the HTTP routes and the live config pointer.
@@ -23,6 +25,7 @@ type Server struct {
 	token    string
 	simCheck func() (bool, error)
 	inputCap inputcap.Capturer
+	logger   *log.Logger
 	mux      *http.ServeMux
 }
 
@@ -32,10 +35,15 @@ func New(cfg *config.Config, opts ServerOpts) *Server {
 	if token == "" {
 		token = generateToken()
 	}
+	logger := opts.Logger
+	if logger == nil {
+		logger = log.Default()
+	}
 	s := &Server{
 		token:    token,
 		simCheck: opts.SimCheck,
 		inputCap: opts.InputCapturer,
+		logger:   logger,
 	}
 	s.cfg.Store(cfg)
 	s.mux = http.NewServeMux()
@@ -44,7 +52,7 @@ func New(cfg *config.Config, opts ServerOpts) *Server {
 }
 
 // Handler returns the server's root HTTP handler.
-func (s *Server) Handler() http.Handler { return s.mux }
+func (s *Server) Handler() http.Handler { return withLogging(s.mux, s.logger) }
 
 // Token returns the effective session token.
 func (s *Server) Token() string { return s.token }

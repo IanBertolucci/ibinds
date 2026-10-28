@@ -52,17 +52,27 @@ func Parse(data []byte) (*File, error) {
 	}
 	start := idx + len(chunkMagic) + 8
 
+	// The 8-byte chunk header after the LRTC magic ends with a uint32 that is
+	// the byte size of the record region. Older files may carry trailing bytes
+	// after that region, so the record walk must be bounded by the chunk size,
+	// not by EOF. (This was previously only partially decoded as "0x76cd".)
+	chunkHeader := idx + len(chunkMagic)
+	recordEnd := start + int(binary.LittleEndian.Uint32(data[chunkHeader+4:chunkHeader+8]))
+	if recordEnd > len(data) {
+		return nil, ErrTruncated
+	}
+
 	f := &File{Raw: data}
 	pos := start
-	for pos < len(data) {
-		nul := bytes.IndexByte(data[pos:], 0)
+	for pos < recordEnd {
+		nul := bytes.IndexByte(data[pos:recordEnd], 0)
 		if nul < 0 {
 			return nil, ErrTruncated
 		}
 		name := string(data[pos : pos+nul])
 		payloadStart := pos + nul + 1
 		end := payloadStart + FixedRegionSize
-		if end > len(data) {
+		if end > recordEnd {
 			return nil, ErrTruncated
 		}
 		rec := Record{

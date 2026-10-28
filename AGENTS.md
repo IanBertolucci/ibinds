@@ -23,12 +23,33 @@ npm install --legacy-peer-deps          # npm 10.8.x needs --legacy-peer-deps
 npx vitest run                          # frontend unit tests
 npm run build                           # outputs web/dist (committed + embedded)
 
+./build.sh                              # from Linux/WSL -> ibinds.exe (no Windows shell)
+VERSION=v0.1.0 ./build.sh               # optional version metadata
 .\build.ps1                             # full Windows build -> ibinds.exe
+.\build.ps1 -Version v0.1.0             # optional version metadata
 ```
+
+Release builds are produced by `.github/workflows/release.yml` on `v*` tags;
+see `docs/RELEASING.md`.
+
+`build.sh` finds Go via `$PATH` or `~/.local/go/bin/go` (override with
+`GO_BIN=/path/to/go`). If a copy already exists at `%USERPROFILE%\ibinds.exe`
+(the one the user double-clicks), it is refreshed too; a running instance is
+stopped first. Agents on WSL should use it instead of switching to Windows.
 
 Run locally: `go run ./cmd/ibinds --token dev --port 8791` (backend) +
 `npm run dev` in `web/` (Vite proxies `/api` to 8791; token `dev` matches the
 `import.meta.env.DEV` fallback).
+
+## Logs
+
+Every run logs to stderr and appends to `%APPDATA%\ibinds\ibinds.log`
+(Windows) or `$XDG_CONFIG_HOME/ibinds/ibinds.log` (Linux); override with
+`--log PATH`. Each API request is one line: method, path, status, duration,
+and the error body for 4xx/5xx. Query strings (session token) are never
+logged. From WSL, read the Windows log at
+`/mnt/c/Users/<user>/AppData/Roaming/ibinds/ibinds.log`; this is the fastest
+way to see a failure the user reports.
 
 ## Architecture
 
@@ -83,13 +104,48 @@ the tests to match reality (the fixtures win over any assumption).
   `+52`, `PIDVID` at `+62` (see FORMAT.md).
 - **Test fixtures are committed real files.** Don't replace them with
   synthetic guesses.
+- **Per-profile current bindings load for every profile.** The home screen
+  must fetch `/api/profiles/{id}/controls` for all profiles, not only the
+  selected ones, and must not gate on `hasControls`; otherwise unselected
+  profiles wrongly render `none`. Covered by `web/src/App.test.ts`.
+- **Calibration copy excludes the source profile.** Targets are
+  `profiles - source`, so "Copy calibration" never copies a profile onto
+  itself. `CalibCopy.svelte` also has an "All targets" toggle.
+- **The running exe may be a copy at `%USERPROFILE%\ibinds.exe`, not the
+  repo binary.** Served assets are embedded at build time, so rebuilding
+  `web/dist` alone does not change a built exe. `build.sh` stops a running
+  instance and refreshes that copy; compare sha256/timestamp before
+  concluding a fix did not apply.
+
+### DirectInput capture (Windows)
+
+- `DirectInput8Create` requires a real HINSTANCE (`GetModuleHandleEx`);
+  passing 0 returns `0x80070057` (E_INVALIDARG).
+- `SetCooperativeLevel` requires a real top-level HWND (the console window,
+  with the desktop shell as fallback); 0 returns `0x80070006` (E_HANDLE).
+- `c_dfDIJoystick2` lives in `dinput8.lib`, not in `dinput8.dll`. The code
+  builds the equivalent button-only `DIDATAFORMAT` in Go; do not use
+  `NewProc("c_dfDIJoystick2")` (it panics).
+- `Acquire()` returns `S_FALSE` (1) when the device is already acquired.
+  Treat it as success, otherwise the capture loop never reads state.
+- **POV hats (sticks) are not buttons.** iRacing maps the four hats to
+  virtual buttons `128..159`, eight directions each starting at up and
+  going clockwise; `povButton` applies that mapping. For example, MOZA R9
+  reports 128 physical buttons plus one POV hat.
+- The `DIDATAFORMAT` must declare POV objects (`DIDFT_OPTIONAL |
+  DIDFT_POV | DIDFT_ANYINSTANCE`); button objects use a NULL GUID. Capture
+  triggers on a rising edge from the state sampled at start, so a held
+  stick/button is not captured immediately.
+- Debug capture from WSL with `./ibinds.exe --capture` (waits 10s for a
+  button) and read the log; the API logs the full 5xx error body.
 
 ## Known limitations / open items
 
 - DirectInput capture compiles for Windows but the button-index conversion
   vs iRacing's "Dev N Btn M" has not been validated on hardware.
-- Friendly car-name map (`internal/labels`) only has `f4` and
-  `Low Fuel Accept`; the rest fall back to their technical slug.
+- Friendly car-name map (`internal/labels`) only has `f4`; control names
+  are curated from the in-game list in `internal/labels/control_labels.go`,
+  and unmapped controls fall back to their technical id.
 - Device enumeration falls back to the profiles' `joyCalib.yaml` on
   non-Windows (button count unknown/0).
 

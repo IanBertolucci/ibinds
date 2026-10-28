@@ -1,43 +1,34 @@
 <script lang="ts">
-  import ProfileList from './components/ProfileList.svelte';
-  import BindingWizard from './components/BindingWizard.svelte';
-  import CalibCopy from './components/CalibCopy.svelte';
-  import PreviewModal from './components/PreviewModal.svelte';
+  import Sidebar from './components/Sidebar.svelte';
+  import ProfilePage from './components/ProfilePage.svelte';
+  import BindingModal from './components/BindingModal.svelte';
   import Settings from './components/Settings.svelte';
-  import {
-    api,
-    type BindingInput,
-    type ControlDTO,
-    type PlanResp,
-    type ProfileDTO,
-  } from './lib/api';
+  import Icon from './components/Icon.svelte';
+  import { api, type ControlDTO, type ProfileDTO } from './lib/api';
 
   let profiles = $state<ProfileDTO[]>([]);
-  let selected = $state<Record<string, boolean>>({});
-  let controlName = $state('');
-  let controls = $state<ControlDTO[]>([]);
-  let controlsByProfile = $state<Record<string, ControlDTO[]>>({});
-  let binding = $state<BindingInput>({});
-  let plan = $state<PlanResp | null>(null);
-  let force = $state(false);
-  let forceOverrides = $state<Record<string, boolean>>({});
-  let mode = $state<'binding' | 'calib'>('binding');
-  let message = $state('');
+  let activeId = $state('');
+  let activeControls = $state<ControlDTO[]>([]);
+  let controlNames = $state<ControlDTO[]>([]);
+  let bindingModal = $state<{ preset: string } | null>(null);
+  let settingsOpen = $state(false);
   let error = $state('');
   let profilesDir = $state('');
+
+  const activeProfile = $derived(profiles.find((p) => p.id === activeId));
 
   async function loadProfiles() {
     try {
       profiles = await api.fetchProfiles();
-      const sel: Record<string, boolean> = {};
-      for (const p of profiles) sel[p.id] = true;
-      selected = sel;
-      // Load the control list (shared names) from the first profile that has
-      // a controls.cfg, so the function picker is populated.
+      if (profiles.length > 0 && !activeId) {
+        activeId = profiles[0].id;
+      }
+      // Shared control-name list for the wizard picker (all profiles share
+      // the same control names; use the first profile that has controls.cfg).
       for (const p of profiles) {
         if (!p.hasControls) continue;
         try {
-          controls = await api.fetchControls(p.id);
+          controlNames = await api.fetchControls(p.id);
         } catch {
           /* ignore */
         }
@@ -48,158 +39,223 @@
     }
   }
 
-  async function onControl(name: string) {
-    controlName = name;
-    controlsByProfile = {};
-    for (const p of profiles) {
-      if (!selected[p.id]) continue;
-      try {
-        controlsByProfile[p.id] = await api.fetchControls(p.id);
-      } catch {
-        /* ignore per-profile fetch errors */
-      }
+  async function loadActiveControls() {
+    if (!activeId) {
+      activeControls = [];
+      return;
     }
-  }
-
-  function toggle(id: string) {
-    selected = { ...selected, [id]: !selected[id] };
-  }
-
-  function toggleAll() {
-    const all = profiles.every((p) => selected[p.id]);
-    const sel: Record<string, boolean> = {};
-    for (const p of profiles) sel[p.id] = !all;
-    selected = sel;
-  }
-
-  function onBinding(b: BindingInput) {
-    binding = b;
-  }
-
-  async function onPlan() {
-    const ids = Object.entries(selected)
-      .filter(([, v]) => v)
-      .map(([id]) => id);
     try {
-      plan = await api.planBinding({
-        control: controlName,
-        binding,
-        profileIds: ids,
-        force,
-        profileOverrides: Object.entries(forceOverrides)
-          .filter(([, v]) => v)
-          .map(([profileId]) => ({ profileId, force: true })),
-      });
-    } catch (e) {
-      error = String(e);
+      activeControls = await api.fetchControls(activeId);
+    } catch {
+      activeControls = [];
     }
   }
 
-  async function onApply() {
-    const ids = Object.entries(selected)
-      .filter(([, v]) => v)
-      .map(([id]) => id);
-    try {
-      const res = await api.applyBinding({
-        control: controlName,
-        binding,
-        profileIds: ids,
-        force,
-        profileOverrides: Object.entries(forceOverrides)
-          .filter(([, v]) => v)
-          .map(([profileId]) => ({ profileId, force: true })),
-      });
-      message = `Applied to ${res.applied.length} profile(s), skipped ${res.skipped.length}.`;
-      plan = null;
-    } catch (e) {
-      error = String(e);
-    }
+  function selectProfile(id: string) {
+    activeId = id;
+  }
+
+  function openBindingModal(preset = '') {
+    bindingModal = { preset };
   }
 
   $effect(() => {
     loadProfiles();
   });
+
+  $effect(() => {
+    loadActiveControls();
+  });
 </script>
 
 <main>
-  <h1>iBinds</h1>
-
-  <nav>
-    <button onclick={() => (mode = 'binding')} class:active={mode === 'binding'}>Bindings</button>
-    <button onclick={() => (mode = 'calib')} class:active={mode === 'calib'}>Calibration</button>
-  </nav>
-
-  {#if error}<p class="error">{error}</p>{/if}
-  {#if message}<p class="ok">{message}</p>{/if}
-
-  {#if mode === 'binding'}
-    <div class="layout">
-      <section>
-        <h2>Profiles</h2>
-        <ProfileList
-          {profiles}
-          {selected}
-          {controlName}
-          {controlsByProfile}
-          onToggle={toggle}
-          onToggleAll={toggleAll}
-        />
-      </section>
-      <section>
-        <h2>Binding</h2>
-        <BindingWizard
-          {controls}
-          {controlName}
-          {binding}
-          onControl={onControl}
-          onBinding={onBinding}
-          onPlan={onPlan}
-        />
-      </section>
+  <header class="topbar">
+    <div class="brand">
+      <span class="brand-mark">iB</span>
+      <div class="brand-copy">
+        <h1>iBinds</h1>
+        <span>iRacing controls</span>
+      </div>
     </div>
-  {:else}
-    <CalibCopy {profiles} {selected} onToggle={toggle} />
+    <div class="topbar-actions">
+      <button class="btn btn-primary" onclick={() => openBindingModal()}>New binding</button>
+      <button class="icon-btn" aria-label="Settings" onclick={() => (settingsOpen = true)}>
+        <Icon name="settings" />
+      </button>
+    </div>
+  </header>
+
+  {#if error}
+    <div class="notices">
+      <div class="banner banner-error" role="alert">{error}</div>
+    </div>
   {/if}
 
-  <Settings profilesDir={profilesDir} onSaved={(d) => (profilesDir = d)} />
+  <div class="layout">
+    <aside class="rail">
+      <Sidebar {profiles} {activeId} onSelect={selectProfile} />
+    </aside>
 
-  {#if plan}
-    <PreviewModal
-      {plan}
-      {force}
-      {forceOverrides}
-      onForce={(v) => (force = v)}
-      onForceOverride={(id, v) => (forceOverrides = { ...forceOverrides, [id]: v })}
-      onApply={onApply}
-      onCancel={() => (plan = null)}
+    <section class="content">
+      {#if activeProfile}
+        <ProfilePage
+          profile={activeProfile}
+          {profiles}
+          controls={activeControls}
+          onEditControl={(name) => openBindingModal(name)}
+        />
+      {:else}
+        <div class="empty-state">
+          <h2>No profile selected</h2>
+          <p>Choose a profile in the sidebar to inspect its controls.</p>
+        </div>
+      {/if}
+    </section>
+  </div>
+
+  {#if bindingModal}
+    <BindingModal
+      {profiles}
+      controls={controlNames}
+      presetControl={bindingModal.preset}
+      onClose={() => (bindingModal = null)}
+    />
+  {/if}
+
+  {#if settingsOpen}
+    <Settings
+      profilesDir={profilesDir}
+      onSaved={(d) => {
+        profilesDir = d;
+        loadProfiles();
+      }}
+      onClose={() => (settingsOpen = false)}
     />
   {/if}
 </main>
 
 <style>
   main {
-    font-family: system-ui, sans-serif;
-    max-width: 70rem;
-    margin: 0 auto;
-    padding: 1rem;
-  }
-  nav {
     display: flex;
+    flex-direction: column;
+    min-height: 100vh;
+  }
+  .topbar {
+    position: sticky;
+    top: 0;
+    z-index: 20;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 1rem;
+    height: 62px;
+    padding: 0 20px;
+    border-bottom: 1px solid var(--border);
+    background: rgba(255, 255, 255, 0.92);
+    backdrop-filter: blur(8px);
+  }
+  .brand {
+    display: flex;
+    align-items: center;
+    gap: 0.65rem;
+  }
+  .brand-mark {
+    display: grid;
+    place-items: center;
+    width: 30px;
+    height: 30px;
+    border-radius: 8px;
+    background: var(--accent);
+    color: #fff;
+    font-size: 0.76rem;
+    font-weight: 800;
+    letter-spacing: 0.01em;
+  }
+  .brand-copy {
+    display: flex;
+    align-items: baseline;
     gap: 0.5rem;
-    margin-bottom: 1rem;
+  }
+  .brand-copy h1 {
+    font-size: 1.05rem;
+    font-weight: 750;
+    letter-spacing: -0.02em;
+  }
+  .brand-copy span {
+    color: var(--muted);
+    font-size: 0.78rem;
+  }
+  .topbar-actions {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+  }
+  .notices {
+    display: flex;
+    flex-direction: column;
+    gap: 0.5rem;
+    width: 100%;
+    max-width: 1600px;
+    margin: 0.9rem auto 0;
+    padding: 0 20px;
   }
   .layout {
     display: grid;
-    grid-template-columns: 1fr 1fr;
-    gap: 2rem;
+    grid-template-columns: 280px minmax(0, 1fr);
+    gap: 20px;
+    width: 100%;
+    max-width: 1600px;
+    margin: 0 auto;
+    padding: 20px;
+    flex: 1;
   }
-  .error {
-    color: #b00;
+  .rail {
+    min-width: 0;
+    align-self: start;
+    position: sticky;
+    top: 82px;
+    max-height: calc(100vh - 102px);
+    overflow: auto;
   }
-  .ok {
-    color: #080;
+  .content {
+    min-width: 0;
   }
-  button.active {
-    font-weight: bold;
+  .empty-state {
+    display: flex;
+    flex-direction: column;
+    gap: 0.35rem;
+    padding: 2rem;
+    border: 1px dashed var(--border-strong);
+    border-radius: var(--radius);
+    background: var(--surface);
+    color: var(--muted);
+  }
+  .empty-state h2 {
+    color: var(--text);
+    font-size: 1rem;
+  }
+  @media (max-width: 1100px) {
+    .layout {
+      grid-template-columns: 1fr;
+    }
+    .rail {
+      position: static;
+      max-height: none;
+    }
+  }
+  @media (max-width: 640px) {
+    .topbar {
+      padding: 0 12px;
+    }
+    .brand-copy span {
+      display: none;
+    }
+    .layout {
+      padding: 12px;
+      gap: 12px;
+    }
+    .notices {
+      padding: 0 12px;
+    }
   }
 </style>
