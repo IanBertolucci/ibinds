@@ -9,6 +9,7 @@ import (
 	"net/http"
 	"os"
 	"path/filepath"
+	"sort"
 	"strings"
 	"time"
 
@@ -108,6 +109,8 @@ func (s *Server) handleProfiles(w http.ResponseWriter, r *http.Request) {
 type controlDTO struct {
 	Name        string `json:"name"`
 	DisplayName string `json:"displayName"`
+	Category    string `json:"category"`
+	Subcategory string `json:"subcategory"`
 	Kind        string `json:"kind"`
 	Key         string `json:"key"`
 	Button      int    `json:"button"`
@@ -148,9 +151,12 @@ func (s *Server) handleProfileControls(w http.ResponseWriter, r *http.Request) {
 
 	out := make([]controlDTO, 0, len(f.Records))
 	for _, rec := range f.Records {
+		group := labels.ControlGroupFor(rec.Name)
 		dto := controlDTO{
 			Name:        rec.Name,
 			DisplayName: labels.Control(rec.Name),
+			Category:    group.Category,
+			Subcategory: group.Subcategory,
 			Kind:        kindString(rec.Kind),
 			Key:         keyString(rec),
 			Button:      rec.Button,
@@ -164,12 +170,27 @@ func (s *Server) handleProfileControls(w http.ResponseWriter, r *http.Request) {
 		}
 		out = append(out, dto)
 	}
+	sort.SliceStable(out, func(i, j int) bool {
+		return labels.ControlGroupFor(out[i].Name).Order < labels.ControlGroupFor(out[j].Name).Order
+	})
 	writeJSON(w, http.StatusOK, out)
 }
 
 func (s *Server) handleSettings(w http.ResponseWriter, r *http.Request) {
+	switch r.Method {
+	case http.MethodGet:
+		writeJSON(w, http.StatusOK, s.cfg.Load())
+	case http.MethodPost:
+		s.saveSettings(w, r)
+	default:
+		http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
+	}
+}
+
+func (s *Server) saveSettings(w http.ResponseWriter, r *http.Request) {
 	var req struct {
-		ProfilesDir string `json:"profilesDir"`
+		ProfilesDir               string  `json:"profilesDir"`
+		DefaultDeviceInstanceGUID *string `json:"defaultDeviceInstanceGUID"`
 	}
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
 		http.Error(w, err.Error(), http.StatusBadRequest)
@@ -179,7 +200,14 @@ func (s *Server) handleSettings(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "profilesDir is not a valid directory", http.StatusBadRequest)
 		return
 	}
-	newCfg := &config.Config{ProfilesDir: req.ProfilesDir}
+	device := s.cfg.Load().DefaultDeviceInstanceGUID
+	if req.DefaultDeviceInstanceGUID != nil {
+		device = *req.DefaultDeviceInstanceGUID
+	}
+	newCfg := &config.Config{
+		ProfilesDir:               req.ProfilesDir,
+		DefaultDeviceInstanceGUID: device,
+	}
 	if err := config.Save(newCfg); err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
@@ -724,7 +752,7 @@ func keyString(rec cfgparse.Record) string {
 	if rec.Kind != cfgparse.KindKey {
 		return ""
 	}
-	return string([]byte{rec.Key})
+	return labels.Key(rec.Key)
 }
 
 // deviceNames maps InstanceGUID -> DeviceName from a profile's joyCalib.yaml.

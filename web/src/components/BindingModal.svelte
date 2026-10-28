@@ -18,16 +18,24 @@
     profiles,
     controls,
     presetControl,
+    presetProfileId = '',
+    defaultDeviceInstanceGUID = '',
     onClose,
   }: {
     profiles: ProfileDTO[];
     controls: ControlDTO[];
     presetControl: string;
+    presetProfileId?: string;
+    defaultDeviceInstanceGUID?: string;
     onClose: () => void;
   } = $props();
 
   let selected = $state<Record<string, boolean>>(
-    untrack(() => Object.fromEntries(profiles.map((p) => [p.id, true]))),
+    untrack(() => {
+      const onlyPreset =
+        presetProfileId !== '' && profiles.some((p) => p.id === presetProfileId);
+      return Object.fromEntries(profiles.map((p) => [p.id, !onlyPreset || p.id === presetProfileId]));
+    }),
   );
   let controlName = $state(untrack(() => presetControl));
   let controlsByProfile = $state<Record<string, ControlDTO[]>>({});
@@ -168,6 +176,7 @@
             {controls}
             {controlName}
             {binding}
+            {defaultDeviceInstanceGUID}
             onControl={onControl}
             onBinding={onBinding}
             onPlan={onPlan}

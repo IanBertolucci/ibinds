@@ -161,6 +161,77 @@ func TestControlsListResolvesDeviceName(t *testing.T) {
 	}
 }
 
+func TestControlsListGroupsAndOrder(t *testing.T) {
+	dir := setupProfilesDir(t, map[string]string{"f4": "f4_key_u.cfg"})
+	ts := newServer(t, dir, ServerOpts{})
+
+	resp := get(t, ts, "/api/profiles/f4/controls?token="+testToken)
+	if resp.StatusCode != http.StatusOK {
+		t.Fatalf("status = %d, want 200", resp.StatusCode)
+	}
+	var controls []map[string]any
+	if err := json.Unmarshal(readBody(t, resp), &controls); err != nil {
+		t.Fatal(err)
+	}
+	if len(controls) == 0 {
+		t.Fatal("no controls")
+	}
+	if controls[0]["name"] != "Throttle" || controls[0]["category"] != "Cockpit" {
+		t.Fatalf("first control = %+v, want Throttle in Cockpit", controls[0])
+	}
+
+	idx := map[string]int{}
+	for i, c := range controls {
+		idx[c["name"].(string)] = i
+	}
+	order := []string{"Throttle", "RecenterTiltAxis", "BlackBoxF1", "RpyToStart", "BrakeBiasInc"}
+	for i := 1; i < len(order); i++ {
+		if idx[order[i-1]] >= idx[order[i]] {
+			t.Fatalf("%s (index %d) should come before %s (index %d)",
+				order[i-1], idx[order[i-1]], order[i], idx[order[i]])
+		}
+	}
+
+	brake := findControl(controls, "BrakeBiasInc")
+	if brake["category"] != "Car Setup Adjustments" || brake["subcategory"] != "Brakes" {
+		t.Fatalf("BrakeBiasInc group = {%v, %v}, want {Car Setup Adjustments, Brakes}",
+			brake["category"], brake["subcategory"])
+	}
+	if pause := findControl(controls, "Pause"); pause["category"] != "Interface" {
+		t.Fatalf("Pause category = %v, want Interface", pause["category"])
+	}
+}
+
+func TestControlsListRendersSpecialKeys(t *testing.T) {
+	dir := setupProfilesDir(t, map[string]string{"f4": "f4_key_u.cfg"})
+	ts := newServer(t, dir, ServerOpts{})
+
+	resp := get(t, ts, "/api/profiles/f4/controls?token="+testToken)
+	if resp.StatusCode != http.StatusOK {
+		t.Fatalf("status = %d, want 200", resp.StatusCode)
+	}
+	var controls []map[string]any
+	if err := json.Unmarshal(readBody(t, resp), &controls); err != nil {
+		t.Fatal(err)
+	}
+	cases := map[string]string{
+		"BlackBoxF1":  "F1",
+		"BlackBoxF12": "F12",
+		"RpyToStart":  "Numpad 7",
+		"RpyStop":     "Numpad .",
+		"Pause":       "Pause",
+	}
+	for name, want := range cases {
+		control := findControl(controls, name)
+		if control == nil {
+			t.Fatalf("%s not found", name)
+		}
+		if control["key"] != want {
+			t.Errorf("%s key = %v, want %q", name, control["key"], want)
+		}
+	}
+}
+
 func TestSettingsPersistsProfilesDir(t *testing.T) {
 	dir := setupProfilesDir(t, map[string]string{"f4": "f4_key_u.cfg"})
 	ts := newServer(t, dir, ServerOpts{})
@@ -179,6 +250,57 @@ func TestSettingsPersistsProfilesDir(t *testing.T) {
 	}
 	if cfg.ProfilesDir != newDir {
 		t.Fatalf("ProfilesDir = %q, want %q", cfg.ProfilesDir, newDir)
+	}
+}
+
+func TestSettingsReportsAndPersistsDefaultDevice(t *testing.T) {
+	dir := setupProfilesDir(t, map[string]string{"f4": "f4_key_u.cfg"})
+	ts := newServer(t, dir, ServerOpts{})
+	dev := "{991805D0-2EB6-11F1-800A-444553540000}"
+
+	resp := get(t, ts, "/api/settings?token="+testToken)
+	if resp.StatusCode != http.StatusOK {
+		t.Fatalf("get settings status = %d, want 200", resp.StatusCode)
+	}
+	var initial map[string]any
+	if err := json.Unmarshal(readBody(t, resp), &initial); err != nil {
+		t.Fatal(err)
+	}
+	if initial["profilesDir"] != dir {
+		t.Fatalf("profilesDir = %v, want %q", initial["profilesDir"], dir)
+	}
+	if initial["defaultDeviceInstanceGUID"] != "" {
+		t.Fatalf("defaultDeviceInstanceGUID = %v, want empty", initial["defaultDeviceInstanceGUID"])
+	}
+
+	if resp := postJSON(t, ts, "/api/settings?token="+testToken, map[string]any{
+		"profilesDir":               dir,
+		"defaultDeviceInstanceGUID": dev,
+	}); resp.StatusCode != http.StatusOK {
+		t.Fatalf("post settings status = %d, want 200", resp.StatusCode)
+	}
+
+	resp = get(t, ts, "/api/settings?token="+testToken)
+	var saved map[string]any
+	if err := json.Unmarshal(readBody(t, resp), &saved); err != nil {
+		t.Fatal(err)
+	}
+	if saved["defaultDeviceInstanceGUID"] != dev {
+		t.Fatalf("defaultDeviceInstanceGUID = %v, want %q", saved["defaultDeviceInstanceGUID"], dev)
+	}
+
+	// Saving only the directory must keep the chosen default device.
+	if resp := postJSON(t, ts, "/api/settings?token="+testToken, map[string]any{
+		"profilesDir": dir,
+	}); resp.StatusCode != http.StatusOK {
+		t.Fatalf("post settings without device status = %d, want 200", resp.StatusCode)
+	}
+	cfg, err := config.Load()
+	if err != nil {
+		t.Fatalf("config.Load: %v", err)
+	}
+	if cfg.DefaultDeviceInstanceGUID != dev {
+		t.Fatalf("DefaultDeviceInstanceGUID = %q, want %q", cfg.DefaultDeviceInstanceGUID, dev)
 	}
 }
 

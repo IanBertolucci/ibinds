@@ -1,30 +1,45 @@
 <script lang="ts">
   import { untrack } from 'svelte';
-  import { api } from '../lib/api';
+  import { api, type DeviceInfo, type Settings as SettingsDTO } from '../lib/api';
   import Icon from './Icon.svelte';
   import { focusTrap } from '../lib/focusTrap';
 
   let {
     profilesDir,
+    defaultDeviceInstanceGUID,
     onSaved,
     onClose,
   }: {
     profilesDir: string;
-    onSaved: (dir: string) => void;
+    defaultDeviceInstanceGUID: string;
+    onSaved: (settings: SettingsDTO) => void;
     onClose: () => void;
   } = $props();
 
   let value = $state(untrack(() => profilesDir));
+  let deviceValue = $state(untrack(() => defaultDeviceInstanceGUID));
+  let devices = $state<DeviceInfo[]>([]);
   let message = $state('');
   let error = $state('');
+
+  $effect(() => {
+    api
+      .fetchInputDevices()
+      .then((d) => {
+        devices = d;
+      })
+      .catch(() => {
+        /* offline fallback is optional */
+      });
+  });
 
   async function save() {
     message = '';
     error = '';
     try {
-      const res = await api.saveSettings(value);
+      const res = await api.saveSettings(value, deviceValue);
       message = 'Saved.';
-      onSaved(res.profilesDir);
+      onSaved(res);
     } catch (e) {
       error = String(e);
     }
@@ -63,6 +78,25 @@
           autocomplete="off"
         />
         <span class="field-hint">The folder that contains your iRacing control profiles.</span>
+      </div>
+
+      <div class="field">
+        <label class="field-label" for="default-device">Default device</label>
+        <select
+          id="default-device"
+          aria-label="Default device"
+          value={deviceValue}
+          onchange={(e) => (deviceValue = e.currentTarget.value)}
+        >
+          <option value="" selected={deviceValue === ''}>First available</option>
+          {#each devices as d (d.instanceGUID)}
+            <option value={d.instanceGUID} selected={d.instanceGUID === deviceValue}>{d.name}</option>
+          {/each}
+          {#if deviceValue && !devices.some((d) => d.instanceGUID === deviceValue)}
+            <option value={deviceValue} selected>Saved device (not detected)</option>
+          {/if}
+        </select>
+        <span class="field-hint">Preselected when you assign a new key or button.</span>
       </div>
 
       {#if error}<p class="error" role="alert">{error}</p>{/if}

@@ -4,16 +4,17 @@
   import BindingModal from './components/BindingModal.svelte';
   import Settings from './components/Settings.svelte';
   import Icon from './components/Icon.svelte';
-  import { api, type ControlDTO, type ProfileDTO } from './lib/api';
+  import { api, type ControlDTO, type ProfileDTO, type Settings as AppSettings } from './lib/api';
 
   let profiles = $state<ProfileDTO[]>([]);
   let activeId = $state('');
   let activeControls = $state<ControlDTO[]>([]);
   let controlNames = $state<ControlDTO[]>([]);
-  let bindingModal = $state<{ preset: string } | null>(null);
+  let bindingModal = $state<{ preset: string; profileId: string } | null>(null);
   let settingsOpen = $state(false);
   let error = $state('');
   let profilesDir = $state('');
+  let defaultDeviceInstanceGUID = $state('');
 
   const activeProfile = $derived(profiles.find((p) => p.id === activeId));
 
@@ -51,15 +52,26 @@
     }
   }
 
+  async function loadSettings() {
+    try {
+      const s = await api.fetchSettings();
+      profilesDir = s.profilesDir;
+      defaultDeviceInstanceGUID = s.defaultDeviceInstanceGUID;
+    } catch {
+      /* ignore: settings are optional for the main flow */
+    }
+  }
+
   function selectProfile(id: string) {
     activeId = id;
   }
 
-  function openBindingModal(preset = '') {
-    bindingModal = { preset };
+  function openBindingModal(preset = '', profileId = '') {
+    bindingModal = { preset, profileId };
   }
 
   $effect(() => {
+    loadSettings();
     loadProfiles();
   });
 
@@ -102,7 +114,7 @@
           profile={activeProfile}
           {profiles}
           controls={activeControls}
-          onEditControl={(name) => openBindingModal(name)}
+          onEditControl={(name) => openBindingModal(name, activeId)}
         />
       {:else}
         <div class="empty-state">
@@ -118,15 +130,19 @@
       {profiles}
       controls={controlNames}
       presetControl={bindingModal.preset}
+      presetProfileId={bindingModal.profileId}
+      {defaultDeviceInstanceGUID}
       onClose={() => (bindingModal = null)}
     />
   {/if}
 
   {#if settingsOpen}
     <Settings
-      profilesDir={profilesDir}
-      onSaved={(d) => {
-        profilesDir = d;
+      {profilesDir}
+      {defaultDeviceInstanceGUID}
+      onSaved={(s: AppSettings) => {
+        profilesDir = s.profilesDir;
+        defaultDeviceInstanceGUID = s.defaultDeviceInstanceGUID;
         loadProfiles();
       }}
       onClose={() => (settingsOpen = false)}
@@ -219,6 +235,28 @@
   }
   .content {
     min-width: 0;
+  }
+  @media (min-width: 1101px) {
+    main {
+      height: 100vh;
+      overflow: hidden;
+    }
+    .layout {
+      grid-template-rows: minmax(0, 1fr);
+      min-height: 0;
+    }
+    .rail {
+      position: static;
+      align-self: stretch;
+      min-height: 0;
+      max-height: none;
+      overflow: visible;
+    }
+    .content {
+      display: flex;
+      flex-direction: column;
+      min-height: 0;
+    }
   }
   .empty-state {
     display: flex;

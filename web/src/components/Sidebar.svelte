@@ -149,6 +149,17 @@
     color: var(--muted);
     font-size: 0.8rem;
   }
+  @media (min-width: 1101px) {
+    .sidebar {
+      height: 100%;
+      min-height: 0;
+    }
+    .profile-list {
+      flex: 1;
+      min-height: 0;
+      max-height: none;
+    }
+  }
   @media (max-width: 1100px) {
     .profile-list {
       max-height: 15rem;

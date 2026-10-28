@@ -99,6 +99,48 @@ func TestControlAudioLabels(t *testing.T) {
 	}
 }
 
+func TestKeyLabels(t *testing.T) {
+	cases := []struct {
+		code byte
+		want string
+	}{
+		{'U', "U"},
+		{'5', "5"},
+		{0x20, "Space"},
+		{0x2c, "Print Screen"},
+		{0x2d, "Insert"},
+		{0x2e, "Delete"},
+		{0x13, "Pause"},
+		{0x21, "Page Up"},
+		{0x22, "Page Down"},
+		{0x26, "Up"},
+		{0x28, "Down"},
+		{0x6b, ","},
+		{0x6c, "-"},
+		{0x6d, "."},
+		{0x70, ";"},
+		{0x72, "="},
+		{0x76, "]"},
+		{0x78, "["},
+		{0x0c, "Numpad 5"},
+		{0xb1, "Numpad 3"},
+		{0xb2, "Numpad 1"},
+		{0xb3, "Numpad 7"},
+		{0xb4, "Numpad 4"},
+		{0xb5, "Numpad 8"},
+		{0xb6, "Numpad 6"},
+		{0xb9, "Numpad ."},
+		{0xc5, "F1"},
+		{0xd0, "F12"},
+		{0xfe, "0xFE"},
+	}
+	for _, tc := range cases {
+		if got := Key(tc.code); got != tc.want {
+			t.Errorf("Key(0x%02X) = %q, want %q", tc.code, got, tc.want)
+		}
+	}
+}
+
 func TestControlLabelsExistInFixtures(t *testing.T) {
 	known := map[string]bool{}
 	paths, err := filepath.Glob(filepath.Join("..", "cfgparse", "testdata", "*.cfg"))
