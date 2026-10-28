@@ -11,13 +11,13 @@ if [ -z "$GO_BIN" ]; then
   elif [ -x "$HOME/.local/go/bin/go" ]; then
     GO_BIN="$HOME/.local/go/bin/go"
   else
-    echo "error: go not found; install Go 1.27+ or set GO_BIN" >&2
+    echo "error: go not found; install Go 1.27.2+ or set GO_BIN" >&2
     exit 1
   fi
 fi
 
 if ! command -v npm >/dev/null 2>&1; then
-  echo "error: npm not found; install Node.js 20+" >&2
+  echo "error: npm not found; install Node.js 20.19+ (or 22.12+)" >&2
   exit 1
 fi
 

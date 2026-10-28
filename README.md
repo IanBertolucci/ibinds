@@ -10,18 +10,24 @@ target record's fields, and keeps everything else byte-for-byte intact.
 
 ## Features
 
-- **Profile-centric UI**: browse every profile, search controls, and see the
-  current key or button binding — including multi-button bindings.
+- **Profile-centric UI**: browse and search every profile, filter controls
+  (all/bound/unbound/copyable), and see the current key or button binding —
+  including multi-button bindings.
 - **Bulk binding**: pick a control and a key or device button, select any set
-  of profiles (baseline included), preview a per-profile diff, and apply.
+  of profiles (baseline included), preview a per-profile diff, and apply. When
+  you edit from a profile, only that profile is preselected.
+- **Default device**: choose the device that should be preselected when you
+  assign a new key or button (Settings → Default device).
 - **Copy bindings**: select controls and copy the exact binding region to other
   profiles. Multi-button masks are preserved.
 - **Friendly names**: control labels use the same names shown in the iRacing
-  controls screen where a mapping is known; unmapped controls keep their
-  technical id.
+  controls screen where a mapping is known; special keys such as F1–F12,
+  numpad keys, Pause and Print Screen are shown by name. Unmapped controls keep
+  their technical id.
 - **Category dividers**: controls are grouped by iRacing's in-game sections
   (Cockpit, Driver's View, Interface, Black Box, …), including the setup
-  subheadings (Brakes, Engine & Throttle, …).
+  subheadings (Brakes, Engine & Throttle, …). The search box also matches
+  section names, so typing `cockpit` or `brakes` filters to that section.
 - **Conflict detection**: warns when the key/button is already bound to another
   control in a profile (iRacing silently resolves such conflicts on load —
   iBinds surfaces them first).
@@ -45,11 +51,16 @@ target record's fields, and keeps everything else byte-for-byte intact.
    ```
 
    The two hashes must match.
-4. Run `ibinds.exe` (double-click or from PowerShell). It starts a local server
-   and opens the UI in your browser.
+4. Run `ibinds.exe` (double-click or from PowerShell). It starts a local server,
+   prints a URL, and opens the UI in your browser. If the browser does not open,
+   open the printed URL yourself.
 
 iBinds is portable: no installer, no administrator rights, and no runtime to
-install. It only reads and writes the iRacing profiles folder on your machine.
+install. It only modifies the iRacing profiles folder and its own settings/log
+files under `%APPDATA%\ibinds` (on Linux, `$XDG_CONFIG_HOME/ibinds`).
+
+iBinds reads the profiles that iRacing has already created. If the profiles
+folder is empty, start iRacing once and save a control profile first.
 
 ### Windows SmartScreen
 
@@ -61,6 +72,9 @@ CLI, the build provenance:
 gh attestation verify .\ibinds.exe --repo IanBertolucci/ibinds
 ```
 
+If Windows shows "Windows protected your PC", choose **More info → Run anyway**
+only after the checksum matches.
+
 Every release is built by GitHub Actions from the tagged source. If you prefer
 not to trust the prebuilt binary, build it yourself from the source archive.
 
@@ -68,9 +82,10 @@ not to trust the prebuilt binary, build it yourself from the source archive.
 
 Requirements:
 
-- Windows 10/11 (iRacing is Windows-only).
-- Go 1.27+ (see `go.mod`).
-- Node.js 20+.
+- Target: Windows 10/11 (iRacing is Windows-only).
+- Build host: Windows, or Linux/WSL with `build.sh`.
+- Go 1.27.2+ (see `go.mod`).
+- Node.js 20.19+ or 22.12+ (required by Vite 8).
 
 Download the source zip from the release (or clone the repository and check out
 the tag), then run:
@@ -79,7 +94,7 @@ the tag), then run:
 powershell -NoProfile -ExecutionPolicy Bypass -File .\build.ps1
 ```
 
-The script installs the web dependencies, builds the SPA, and cross-compiles
+The script installs the web dependencies, builds the SPA, and builds
 `ibinds.exe` in the repository root. To include a version string:
 
 ```powershell
@@ -95,7 +110,8 @@ VERSION=v0.1.0 ./build.sh  # optional version metadata
 
 `build.sh` finds Go via `$PATH` or `~/.local/go/bin/go` (override with
 `GO_BIN=/path/to/go`). If a copy already exists at `%USERPROFILE%\ibinds.exe`
-(the one the user double-clicks), it tries to refresh it too.
+(the one the user double-clicks), it stops a running instance and refreshes
+that copy.
 
 ## Usage
 
@@ -116,14 +132,20 @@ CLI flags:
 --log FILE          log file path (default: user config dir/ibinds/ibinds.log)
 ```
 
+Use the settings icon to change the profiles directory and choose the default
+device. The default device is preselected when you assign a new key or button;
+if it is not connected, the first available device is used. Settings are stored
+in `%APPDATA%\ibinds\config.json`.
+
 The profiles directory is resolved in this order: `--dir` flag,
 `IBINDS_PROFILES_DIR` environment variable, the saved config file, or the
 default `Documents/iRacing/profiles/controls`.
 
 Logs go to stderr and the log file (on Windows,
-`%APPDATA%\ibinds\ibinds.log`). Each API request is logged with method, path,
-status, duration, and the error body for 4xx/5xx; the session token is never
-logged.
+`%APPDATA%\ibinds\ibinds.log`; on Linux, `$XDG_CONFIG_HOME/ibinds/ibinds.log`).
+The file is rotated at 5 MB to `ibinds.log.old`. Each API request is logged with
+method, path, status, duration, and the error body for 4xx/5xx; the session
+token is never logged.
 
 ## Development
 
@@ -158,7 +180,8 @@ metadata, writes `SHA256SUMS.txt`, attests build provenance, and publishes:
 
 - `ibinds.exe`
 - `SHA256SUMS.txt`
-- GitHub's automatic `Source code (zip)`
+- GitHub's automatic source archives (`Source code (zip)` and
+  `Source code (tar.gz)`)
 
 See [`docs/RELEASING.md`](docs/RELEASING.md) for the maintainer checklist.
 

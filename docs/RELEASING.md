@@ -11,10 +11,15 @@ file needs editing.
 - [ ] `GOOS=windows GOARCH=amd64 go build ./...` passes.
 - [ ] `cd web && npx vitest run` passes.
 - [ ] `cd web && npm run build` passes with no Svelte warnings.
-- [ ] `./build.sh` produces `ibinds.exe`.
+- [ ] `./build.sh` (Linux/WSL) or `.\build.ps1` (Windows) produces
+      `ibinds.exe`.
 - [ ] `ibinds.exe --version` prints the expected version.
-- [ ] On Windows, with iRacing closed, test: open the UI, edit one binding,
-      copy one binding, and copy calibration. Confirm the backups exist.
+- [ ] On Windows, with iRacing closed, test: open the UI, change the default
+      device in Settings, edit one binding, copy one binding, and copy
+      calibration. Confirm the default device is preselected and the backups
+      exist.
+- [ ] Search for a category (for example `cockpit`) and confirm the controls
+      list filters to that section.
 - [ ] Update `README.md` if flags, prerequisites, or behavior changed.
 
 ## Tag and publish
@@ -74,7 +79,9 @@ gh attestation verify .\ibinds.exe --repo IanBertolucci/ibinds
 
 The project does not currently pay for code signing. SmartScreen may warn on
 first run. Do not tell users to disable SmartScreen; point them to the SHA-256
-checksum, the build-provenance attestation, and the source archive.
+checksum, the build-provenance attestation, and the source archive. If they
+choose to run the binary, use **More info → Run anyway** only after the checksum
+matches.
 
 Future options, only after an explicit decision:
 
@@ -92,7 +99,8 @@ release manually, keep these sections:
 
 1. Download `ibinds.exe`.
 2. Verify the SHA-256 checksum against `SHA256SUMS.txt`.
-3. Run `ibinds.exe`.
+3. Run `ibinds.exe`. If the browser does not open, use the URL printed in the
+   terminal.
 
 ## Verify the download
 
@@ -102,7 +110,8 @@ gh attestation verify .\ibinds.exe --repo IanBertolucci/ibinds
 
 ## Build from source
 
-Download the source zip, install Go 1.27+ and Node.js 20+, then run:
+Download the source zip, install Go 1.27.2+ and Node.js 20.19+ (or 22.12+),
+then run:
 
 powershell -NoProfile -ExecutionPolicy Bypass -File .\build.ps1
 
