@@ -108,12 +108,14 @@
     />
     {#if hint}<p class="hint">{hint}</p>{/if}
   {:else}
-    <CalibCopy
-      {profiles}
-      selected={selectedProfiles}
-      source={profile.id}
-      onToggle={toggleProfile}
-    />
+    <div class="tab-scroll">
+      <CalibCopy
+        {profiles}
+        selected={selectedProfiles}
+        source={profile.id}
+        onToggle={toggleProfile}
+      />
+    </div>
   {/if}
 
   {#if copyOpen}
@@ -192,6 +194,17 @@
   .hint {
     color: var(--warning);
     font-size: 0.82rem;
+  }
+  @media (min-width: 1101px) {
+    .profile-page {
+      height: 100%;
+      min-height: 0;
+    }
+    .tab-scroll {
+      flex: 1;
+      min-height: 0;
+      overflow: auto;
+    }
   }
   @media (max-width: 640px) {
     .profile-header {

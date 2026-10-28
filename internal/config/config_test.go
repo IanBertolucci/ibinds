@@ -67,6 +67,49 @@ func TestFileOverride(t *testing.T) {
 	}
 }
 
+func TestDefaultDevicePersists(t *testing.T) {
+	isolateHome(t)
+	dev := "{991805D0-2EB6-11F1-800A-444553540000}"
+	if err := Save(&Config{
+		ProfilesDir:               filepath.Join(t.TempDir(), "profiles"),
+		DefaultDeviceInstanceGUID: dev,
+	}); err != nil {
+		t.Fatalf("Save: %v", err)
+	}
+
+	c, err := Load()
+	if err != nil {
+		t.Fatalf("Load: %v", err)
+	}
+	if c.DefaultDeviceInstanceGUID != dev {
+		t.Fatalf("DefaultDeviceInstanceGUID = %q, want %q", c.DefaultDeviceInstanceGUID, dev)
+	}
+}
+
+func TestDefaultDeviceSurvivesEnvOverride(t *testing.T) {
+	home := isolateHome(t)
+	dev := "{991805D0-2EB6-11F1-800A-444553540000}"
+	if err := Save(&Config{
+		ProfilesDir:               filepath.Join(home, "fromfile"),
+		DefaultDeviceInstanceGUID: dev,
+	}); err != nil {
+		t.Fatalf("Save: %v", err)
+	}
+	envDir := filepath.Join(home, "env")
+	t.Setenv("IBINDS_PROFILES_DIR", envDir)
+
+	c, err := Load()
+	if err != nil {
+		t.Fatalf("Load: %v", err)
+	}
+	if c.ProfilesDir != envDir {
+		t.Fatalf("ProfilesDir = %q, want %q", c.ProfilesDir, envDir)
+	}
+	if c.DefaultDeviceInstanceGUID != dev {
+		t.Fatalf("DefaultDeviceInstanceGUID = %q, want %q", c.DefaultDeviceInstanceGUID, dev)
+	}
+}
+
 func TestFlagOverride(t *testing.T) {
 	home := isolateHome(t)
 	t.Setenv("IBINDS_PROFILES_DIR", filepath.Join(home, "env"))

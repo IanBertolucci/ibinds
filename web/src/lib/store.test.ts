@@ -14,6 +14,8 @@ function control(partial: Partial<ControlDTO>): ControlDTO {
   return {
     name: '',
     displayName: '',
+    category: '',
+    subcategory: '',
     kind: 'unbound',
     key: '',
     button: 0,

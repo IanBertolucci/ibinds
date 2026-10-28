@@ -6,6 +6,7 @@
     controls,
     controlName,
     binding,
+    defaultDeviceInstanceGUID = '',
     onControl,
     onBinding,
     onPlan,
@@ -13,6 +14,7 @@
     controls: ControlDTO[];
     controlName: string;
     binding: BindingInput;
+    defaultDeviceInstanceGUID?: string;
     onControl: (name: string) => void;
     onBinding: (b: BindingInput) => void;
     onPlan: () => void;
@@ -34,7 +36,12 @@
   $effect(() => {
     api.fetchInputDevices().then((d) => {
       devices = d;
-      if (d.length > 0) selectedDevice = d[0].instanceGUID;
+      const preferred = d.find((x) => x.instanceGUID === defaultDeviceInstanceGUID);
+      if (preferred) {
+        selectedDevice = preferred.instanceGUID;
+      } else if (d.length > 0) {
+        selectedDevice = d[0].instanceGUID;
+      }
     });
   });
 

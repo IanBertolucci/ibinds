@@ -75,6 +75,32 @@ type-dependent; offsets below are relative to its start (`PayloadStart`).
 - `2` → button
 - `4` → key (ASCII byte at `+12`)
 
+### Keyboard key codes
+
+Key records store iRacing's own key code at `+12`, **not** ASCII or a Windows
+virtual-key code. Printable letters `A`-`Z` and digits `0`-`9` happen to match
+ASCII, but many keys do not. Values verified against real profiles and
+iRacing's published default shortcuts:
+
+| Code | Key | Code | Key |
+|---|---|---|---|
+| `0x0c` | Numpad 5 | `0x13` | Pause |
+| `0x20` | Space | `0x21` / `0x22` | Page Up / Page Down |
+| `0x23` / `0x24` | End / Home | `0x25`–`0x28` | Left/Up/Right/Down |
+| `0x2c` | Print Screen | `0x2d` / `0x2e` | Insert / Delete |
+| `0x6b` | `,` | `0x6c` | `-` |
+| `0x6d` | `.` | `0x70` | `;` |
+| `0x72` | `=` | `0x76` | `]` |
+| `0x78` | `[` | `0xb1` | Numpad 3 |
+| `0xb2` | Numpad 1 | `0xb3` | Numpad 7 |
+| `0xb4` | Numpad 4 | `0xb5` | Numpad 8 |
+| `0xb6` | Numpad 6 | `0xb9` | Numpad . |
+| `0xc5`–`0xd0` | F1–F12 | | |
+
+The numpad values were derived from the stock replay bindings (for example
+`RpyToStart` = Numpad 7 and `RpyFrameRew` = Numpad 4), which match iRacing's
+documented defaults. Display mapping lives in `internal/labels` (`Key`).
+
 ### Button bitmask
 
 Five 32-bit words at `+12..+31` cover buttons `0..159`; button N is bit

@@ -8,7 +8,8 @@ import (
 
 // Config holds the resolved application configuration.
 type Config struct {
-	ProfilesDir string `json:"profilesDir"`
+	ProfilesDir               string `json:"profilesDir"`
+	DefaultDeviceInstanceGUID string `json:"defaultDeviceInstanceGUID"`
 }
 
 // FlagDir is the value of the --dir command-line flag. Empty means unset.
@@ -18,20 +19,27 @@ var FlagDir string
 // Load resolves the profiles directory with this priority:
 // --dir flag > IBINDS_PROFILES_DIR env > user config file > default.
 func Load() (*Config, error) {
+	c, err := loadFile()
+	if err != nil {
+		c = &Config{}
+	}
 	if FlagDir != "" {
-		return &Config{ProfilesDir: FlagDir}, nil
+		c.ProfilesDir = FlagDir
+		return c, nil
 	}
 	if env := os.Getenv("IBINDS_PROFILES_DIR"); env != "" {
-		return &Config{ProfilesDir: env}, nil
+		c.ProfilesDir = env
+		return c, nil
 	}
-	if c, err := loadFile(); err == nil && c.ProfilesDir != "" {
+	if c.ProfilesDir != "" {
 		return c, nil
 	}
 	doc, err := DocumentsDir()
 	if err != nil {
 		return nil, err
 	}
-	return &Config{ProfilesDir: filepath.Join(doc, "iRacing", "profiles", "controls")}, nil
+	c.ProfilesDir = filepath.Join(doc, "iRacing", "profiles", "controls")
+	return c, nil
 }
 
 // Save persists the config as JSON in the user config directory.

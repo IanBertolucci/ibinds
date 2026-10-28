@@ -19,6 +19,9 @@ target record's fields, and keeps everything else byte-for-byte intact.
 - **Friendly names**: control labels use the same names shown in the iRacing
   controls screen where a mapping is known; unmapped controls keep their
   technical id.
+- **Category dividers**: controls are grouped by iRacing's in-game sections
+  (Cockpit, Driver's View, Interface, Black Box, …), including the setup
+  subheadings (Brakes, Engine & Throttle, …).
 - **Conflict detection**: warns when the key/button is already bound to another
   control in a profile (iRacing silently resolves such conflicts on load —
   iBinds surfaces them first).

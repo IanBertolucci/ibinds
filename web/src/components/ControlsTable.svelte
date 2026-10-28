@@ -48,9 +48,28 @@
       if (filter === 'copyable' && !copyableControl(c)) return false;
       if (!search) return true;
       const q = search.toLowerCase();
-      return c.name.toLowerCase().includes(q) || c.displayName.toLowerCase().includes(q);
+      return (
+        c.name.toLowerCase().includes(q) ||
+        c.displayName.toLowerCase().includes(q) ||
+        c.category.toLowerCase().includes(q) ||
+        c.subcategory.toLowerCase().includes(q)
+      );
     }),
   );
+  function showCategory(i: number): boolean {
+    const c = filtered[i];
+    if (!c.category) return false;
+    return i === 0 || filtered[i - 1].category !== c.category;
+  }
+  function showSubcategory(i: number): boolean {
+    const c = filtered[i];
+    if (!c.subcategory) return false;
+    return (
+      i === 0 ||
+      filtered[i - 1].category !== c.category ||
+      filtered[i - 1].subcategory !== c.subcategory
+    );
+  }
   const selectable = $derived(filtered.filter(copyableControl));
   const allSelected = $derived(
     selectable.length > 0 && selectable.every((c) => selected[c.name]),
@@ -88,7 +107,8 @@
     <span class="result-count">{filtered.length} of {controls.length}</span>
   </div>
 
-  <div class="table-wrap">
+  <div class="table-card">
+    <div class="table-wrap">
     <table>
       <thead>
         <tr>
@@ -107,8 +127,18 @@
         </tr>
       </thead>
       <tbody>
-        {#each filtered as c (c.name)}
-          <tr class:selected={selected[c.name]}>
+        {#each filtered as c, i (c.name)}
+          {#if showCategory(i)}
+            <tr class="category-row">
+              <td colspan="4">{c.category}</td>
+            </tr>
+          {/if}
+          {#if showSubcategory(i)}
+            <tr class="subcategory-row">
+              <td colspan="4">{c.subcategory}</td>
+            </tr>
+          {/if}
+          <tr class="control-row" class:selected={selected[c.name]}>
             <td class="check">
               <input
                 type="checkbox"
@@ -158,15 +188,16 @@
     </table>
   </div>
 
-  <div class="footer">
-    <span class="selection-count">
-      {selectedCount} selected
-      {#if hiddenSelectedCount > 0}<span class="muted">({hiddenSelectedCount} hidden)</span>{/if}
-    </span>
-    <button class="btn" onclick={onCopySelected}>
-      <Icon name="copy" size={15} />
-      Copy selected →
-    </button>
+    <div class="footer">
+      <span class="selection-count">
+        {selectedCount} selected
+        {#if hiddenSelectedCount > 0}<span class="muted">({hiddenSelectedCount} hidden)</span>{/if}
+      </span>
+      <button class="btn" onclick={onCopySelected}>
+        <Icon name="copy" size={15} />
+        Copy selected →
+      </button>
+    </div>
   </div>
 </div>
 
@@ -237,13 +268,18 @@
     font-size: 0.76rem;
     font-variant-numeric: tabular-nums;
   }
-  .table-wrap {
-    max-height: calc(100vh - 270px);
-    overflow: auto;
+  .table-card {
+    display: flex;
+    flex-direction: column;
+    min-height: 0;
+    overflow: hidden;
     border: 1px solid var(--border);
     border-radius: var(--radius);
     background: var(--surface);
     box-shadow: var(--shadow-sm);
+  }
+  .table-wrap {
+    overflow: auto;
   }
   table {
     width: 100%;
@@ -273,11 +309,29 @@
   tbody tr:last-child td {
     border-bottom: 0;
   }
-  tbody tr:hover {
+  tbody tr.control-row:hover {
     background: #fafcfd;
   }
   tbody tr.selected {
     background: var(--accent-soft);
+  }
+  .category-row td {
+    padding: 0.55rem 0.7rem 0.35rem;
+    border-bottom: 1px solid var(--border);
+    background: var(--surface-2);
+    color: var(--muted);
+    font-size: 0.68rem;
+    font-weight: 800;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+  }
+  .subcategory-row td {
+    padding: 0.32rem 0.7rem;
+    border-bottom: 1px solid var(--border);
+    background: #fafcfd;
+    color: var(--faint);
+    font-size: 0.7rem;
+    font-weight: 700;
   }
   .check {
     width: 2.2rem;
@@ -350,11 +404,31 @@
     align-items: center;
     justify-content: space-between;
     gap: 0.5rem;
+    padding: 0.55rem 0.7rem;
+    border-top: 1px solid var(--border);
   }
   .selection-count {
     color: var(--muted);
     font-size: 0.8rem;
     font-variant-numeric: tabular-nums;
+  }
+  @media (min-width: 1101px) {
+    .controls {
+      flex: 1;
+      min-height: 0;
+    }
+    .table-card {
+      flex: 1;
+      min-height: 0;
+    }
+    .table-wrap {
+      flex: 1;
+      min-height: 0;
+      max-height: none;
+    }
+    .footer {
+      flex-shrink: 0;
+    }
   }
   @media (max-width: 1100px) {
     .table-wrap {

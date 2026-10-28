@@ -25,6 +25,8 @@ function controlsFor(id: string) {
     {
       name: 'BrakeBiasInc',
       displayName: 'Brake Bias Inc',
+      category: 'Cockpit',
+      subcategory: '',
       kind: 'button',
       key: '',
       button: id === 'f4' ? 5 : 7,
@@ -118,6 +120,98 @@ describe('App profile navigation', () => {
 
     const select = target.querySelector('.modal select') as HTMLSelectElement;
     expect(select.value).toBe('BrakeBiasInc');
+
+    unmount(app);
+    target.remove();
+  });
+
+  test('Edit on a control preselects only the active profile', async () => {
+    const { target, app } = await setupApp();
+
+    const f4 = [...target.querySelectorAll('aside .sidebar button')].find((b) =>
+      b.textContent?.includes('F4'),
+    ) as HTMLButtonElement;
+    f4.click();
+    await settle();
+
+    const edit = [...target.querySelectorAll('button')].find((b) => b.textContent?.trim() === 'Edit');
+    (edit as HTMLButtonElement).click();
+    await settle();
+
+    const rows = [
+      ...target.querySelectorAll('.modal .profile-list label.row:not(.select-all)'),
+    ];
+    const checked = rows
+      .filter((row) => (row.querySelector('input[type=checkbox]') as HTMLInputElement).checked)
+      .map((row) => row.querySelector('span')?.textContent?.trim());
+
+    expect(checked).toEqual(['F4']);
+
+    unmount(app);
+    target.remove();
+  });
+
+  test('Edit preselects the default device from settings', async () => {
+    const devices = [
+      { name: 'Alpha Wheel', instanceGUID: '{AAA}', productGUID: 'p1', buttonCount: 16 },
+      { name: 'Beta Wheel', instanceGUID: '{BBB}', productGUID: 'p2', buttonCount: 16 },
+    ];
+    globalThis.fetch = vi.fn(async (input: RequestInfo | URL) => {
+      const url = String(input);
+      if (url.startsWith('/api/settings')) {
+        return jsonResponse({ profilesDir: 'D', defaultDeviceInstanceGUID: '{BBB}' });
+      }
+      if (url.startsWith('/api/profiles/')) {
+        const id = decodeURIComponent(url.split('/')[3].split('?')[0]);
+        return jsonResponse(controlsFor(id));
+      }
+      if (url.startsWith('/api/profiles')) return jsonResponse(profiles);
+      if (url.startsWith('/api/input/devices')) return jsonResponse(devices);
+      return jsonResponse({});
+    }) as typeof fetch;
+
+    const target = document.createElement('div');
+    document.body.appendChild(target);
+    const app = mount(App, { target });
+    await settle();
+
+    const f4 = [...target.querySelectorAll('aside .sidebar button')].find((b) =>
+      b.textContent?.includes('F4'),
+    ) as HTMLButtonElement;
+    f4.click();
+    await settle();
+
+    const edit = [...target.querySelectorAll('button')].find((b) => b.textContent?.trim() === 'Edit');
+    (edit as HTMLButtonElement).click();
+    await settle();
+
+    const deviceLabel = [...target.querySelectorAll('.manual-grid label.field')].find((l) =>
+      l.textContent?.includes('Device'),
+    );
+    const select = deviceLabel?.querySelector('select') as HTMLSelectElement;
+    expect(select.value).toBe('{BBB}');
+
+    unmount(app);
+    target.remove();
+  });
+
+  test('New binding preselects every profile', async () => {
+    const { target, app } = await setupApp();
+
+    const newBinding = [...target.querySelectorAll('button')].find((b) =>
+      b.textContent?.trim() === 'New binding',
+    ) as HTMLButtonElement;
+    newBinding.click();
+    await settle();
+
+    const rows = [
+      ...target.querySelectorAll('.modal .profile-list label.row:not(.select-all)'),
+    ];
+    const checked = rows.map(
+      (row) => (row.querySelector('input[type=checkbox]') as HTMLInputElement).checked,
+    );
+
+    expect(checked).toEqual([true, true, true]);
 
     unmount(app);
     target.remove();

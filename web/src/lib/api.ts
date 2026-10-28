@@ -9,6 +9,8 @@ export interface ProfileDTO {
 export interface ControlDTO {
   name: string;
   displayName: string;
+  category: string;
+  subcategory: string;
   kind: string;
   key: string;
   button: number;
@@ -71,6 +73,11 @@ export interface CaptureResp {
   button: number;
   deviceInstanceGUID: string;
   productGUID: string;
+}
+
+export interface Settings {
+  profilesDir: string;
+  defaultDeviceInstanceGUID: string;
 }
 
 export interface CalibReq {
@@ -157,6 +164,7 @@ export const api = {
   fetchInputDevices: () => request<DeviceInfo[]>('GET', '/api/input/devices'),
   capture: (timeoutMs: number) =>
     request<CaptureResp>('POST', '/api/input/capture', { timeoutMs }),
-  saveSettings: (profilesDir: string) =>
-    request<{ profilesDir: string }>('POST', '/api/settings', { profilesDir }),
+  fetchSettings: () => request<Settings>('GET', '/api/settings'),
+  saveSettings: (profilesDir: string, defaultDeviceInstanceGUID: string) =>
+    request<Settings>('POST', '/api/settings', { profilesDir, defaultDeviceInstanceGUID }),
 };
