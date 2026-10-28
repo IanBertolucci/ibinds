@@ -8,6 +8,36 @@ control profiles — without opening the simulator. It reads the local
 `Documents/iRacing/profiles/controls/`, applies surgical edits to only the
 target record's fields, and keeps everything else byte-for-byte intact.
 
+## Motivation
+
+iRacing stores control bindings in a baseline profile and in per-car profiles.
+That split is useful: each car can keep its own force feedback and button
+layout. But it also means a single change — for example, assigning a function
+to the wheel's P/L button — has to be repeated manually in every relevant car
+profile, and using only the baseline does not work for cars that must keep
+their specific settings.
+
+iBinds was built to remove that manual work. It reads the local configuration
+files and lets you apply a binding across many profiles or copy a binding from
+one car to other cars, while preserving the differences that should stay.
+
+### Is it for you?
+
+iBinds is useful if you:
+
+- keep per-car profiles with different bindings or force feedback;
+- change wheels or button boxes and need to update a binding across many cars;
+- want to copy calibration from one profile to others without recalibrating
+  every car;
+- prefer editing bindings with the simulator closed.
+
+You probably do not need iBinds if you:
+
+- use a single baseline profile for every car;
+- change bindings rarely and are comfortable doing it in iRacing;
+- want help tuning force feedback or editing calibration values — iBinds only
+  copies `joyCalib.yaml` unchanged.
+
 ## Features
 
 - **Profile-centric UI**: browse and search every profile, filter controls
@@ -20,10 +50,10 @@ target record's fields, and keeps everything else byte-for-byte intact.
   assign a new key or button (Settings → Default device).
 - **Copy bindings**: select controls and copy the exact binding region to other
   profiles. Multi-button masks are preserved.
-- **Friendly names**: control labels use the same names shown in the iRacing
+- **Friendly names**: control labels use the same names shown on the iRacing
   controls screen where a mapping is known; special keys such as F1–F12,
-  numpad keys, Pause and Print Screen are shown by name. Unmapped controls keep
-  their technical id.
+  numpad keys, Pause, and Print Screen are shown by name. Unmapped controls keep
+  their technical ID.
 - **Category dividers**: controls are grouped by iRacing's in-game sections
   (Cockpit, Driver's View, Interface, Black Box, …), including the setup
   subheadings (Brakes, Engine & Throttle, …). The search box also matches
@@ -51,9 +81,9 @@ target record's fields, and keeps everything else byte-for-byte intact.
    ```
 
    The two hashes must match.
-4. Run `ibinds.exe` (double-click or from PowerShell). It starts a local server,
-   prints a URL, and opens the UI in your browser. If the browser does not open,
-   open the printed URL yourself.
+4. Run `ibinds.exe` (double-click it, or run it from PowerShell). It starts a
+   local server, prints a URL, and opens the UI in your browser. If the browser
+   does not open, open the printed URL yourself.
 
 iBinds is portable: no installer, no administrator rights, and no runtime to
 install. It only modifies the iRacing profiles folder and its own settings/log
@@ -83,7 +113,7 @@ not to trust the prebuilt binary, build it yourself from the source archive.
 Requirements:
 
 - Target: Windows 10/11 (iRacing is Windows-only).
-- Build host: Windows, or Linux/WSL with `build.sh`.
+- Build host: Windows or Linux/WSL with `build.sh`.
 - Go 1.27.2+ (see `go.mod`).
 - Node.js 20.19+ or 22.12+ (required by Vite 8).
 
@@ -110,7 +140,7 @@ VERSION=v0.1.0 ./build.sh  # optional version metadata
 
 `build.sh` finds Go via `$PATH` or `~/.local/go/bin/go` (override with
 `GO_BIN=/path/to/go`). If a copy already exists at `%USERPROFILE%\ibinds.exe`
-(the one the user double-clicks), it stops a running instance and refreshes
+(the one you double-click), it stops a running instance and refreshes
 that copy.
 
 ## Usage
