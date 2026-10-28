@@ -219,6 +219,14 @@ metadata, writes `SHA256SUMS.txt`, attests build provenance, and publishes:
 
 See [`docs/RELEASING.md`](docs/RELEASING.md) for the maintainer checklist.
 
+## Project docs
+
+- [Roadmap](docs/ROADMAP.md) — planned work and priorities.
+- [Known limitations](docs/KNOWN_LIMITATIONS.md) — what iBinds does not do yet.
+- [FAQ](docs/FAQ.md) — common questions and troubleshooting.
+- [Binary format](docs/FORMAT.md) — `controls.cfg` reference.
+- [Releasing](docs/RELEASING.md) — maintainer checklist.
+
 ## Binary format
 
 `controls.cfg` decoding is documented in [`docs/FORMAT.md`](docs/FORMAT.md),
