@@ -1,6 +1,10 @@
 # Superpowers SDD workspace (scratch)
 .superpowers/
 
+# Internal process/session artifacts
+INITIAL_INSTRUCTIONS.md
+docs/superpowers/
+
 # Built binary
 /ibinds.exe
 /ibinds

@@ -22,7 +22,7 @@ function mountSettings(overrides: Record<string, unknown> = {}) {
   const app = mount(Settings, {
     target,
     props: {
-      profilesDir: 'C:\\Users\\Ian\\Documents\\iRacing',
+      profilesDir: 'C:\\Users\\user\\Documents\\iRacing',
       defaultDeviceInstanceGUID: '',
       onSaved,
       onClose,
@@ -42,7 +42,7 @@ describe('Settings', () => {
     const { target, app } = mountSettings();
     const input = target.querySelector('input[aria-label="Profiles directory"]') as HTMLInputElement;
     expect(input).toBeTruthy();
-    expect(input.value).toBe('C:\\Users\\Ian\\Documents\\iRacing');
+    expect(input.value).toBe('C:\\Users\\user\\Documents\\iRacing');
     unmount(app);
     target.remove();
   });
@@ -89,7 +89,7 @@ describe('Settings', () => {
     expect(saveCall).toBeTruthy();
     const body = JSON.parse(saveCall![1]!.body as string);
     expect(body).toEqual({
-      profilesDir: 'C:\\Users\\Ian\\Documents\\iRacing',
+      profilesDir: 'C:\\Users\\user\\Documents\\iRacing',
       defaultDeviceInstanceGUID: '{BBB}',
     });
     unmount(app);
