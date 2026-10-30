@@ -9,7 +9,7 @@ control profiles — without opening the simulator. It reads the local
 target record's fields, and keeps everything else byte-for-byte intact.
 
 <p align="center">
-  <img src="docs/images/main-screen.png" alt="iBinds main screen with the profile sidebar, controls table, and current bindings" width="1200">
+  <img src="docs/images/ibinds-demo-720p.gif" alt="Animated demo of iBinds editing and copying iRacing control bindings" width="1200">
 </p>
 
 ## Motivation
