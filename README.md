@@ -166,10 +166,14 @@ CLI flags:
 --log FILE          log file path (default: user config dir/ibinds/ibinds.log)
 ```
 
-Use the settings icon to change the profiles directory and choose the default
-device. The default device is preselected when you assign a new key or button;
-if it is not connected, the first available device is used. Settings are stored
-in `%APPDATA%\ibinds\config.json`.
+On first run, iBinds asks you to confirm your **iRacing folder** (usually
+`Documents/iRacing`); it derives the control profiles folder
+(`<iRacing folder>/profiles/controls`) from it. If the folder has no control
+profiles yet, the app opens with an empty profile list — create a control
+profile in iRacing and reopen iBinds. Use the settings icon later to change the
+iRacing folder and choose the default device. The default device is preselected
+when you assign a new key or button; if it is not connected, the first available
+device is used. Settings are stored in `%APPDATA%\ibinds\config.json`.
 
 The profiles directory is resolved in this order: `--dir` flag,
 `IBINDS_PROFILES_DIR` environment variable, the saved config file, or the

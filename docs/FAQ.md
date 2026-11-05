@@ -157,6 +157,14 @@ testing.
 The binary is not code-signed. Verify the SHA-256 checksum (and build provenance
 when available), or build from source. Do not disable SmartScreen.
 
+### How does iBinds find my iRacing folder?
+
+On first run it asks you to confirm the iRacing folder, usually
+`Documents/iRacing`. iBinds resolves Documents through the Windows Known Folder
+API, so OneDrive redirection works, and it derives the control profiles folder
+(`<iRacing folder>/profiles/controls`) from your choice. You can change the
+iRacing folder later in Settings.
+
 ### Does it work with OneDrive-redirected Documents?
 
 Yes. On Windows, iBinds resolves the real Documents folder through the Windows
@@ -165,7 +173,9 @@ Known Folder API.
 ### Where are settings and logs?
 
 Under `%APPDATA%\ibinds` on Windows. On Linux, they follow
-`$XDG_CONFIG_HOME/ibinds`.
+`$XDG_CONFIG_HOME/ibinds`. `config.json` stores the confirmed iRacing folder,
+the default device, and whether first-run setup is complete; the control
+profiles folder is derived from the iRacing folder.
 
 ### Is there an installer?
 

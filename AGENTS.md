@@ -123,6 +123,13 @@ mapping used by the API.
   is read/written by `GET/POST /api/settings`; a POST without the field
   preserves the current value. The binding wizard preselects it, falling back
   to the first device if it is not connected.
+- **The confirmed path is the iRacing folder, not the profiles folder.**
+  `Config.IRacingDir` is confirmed on first run; `Config.ProfilesDir` is derived
+  as `<IRacingDir>/profiles/controls` and remains a legacy/override field.
+  `--dir` and `IBINDS_PROFILES_DIR` still override the profiles directory and
+  imply `Onboarded=true`. Legacy configs with only `profilesDir` migrate
+  silently and must not show onboarding. `GET /api/profiles` returns `200 []`
+  when the profiles directory does not exist (never `500`).
 - **Edit vs New binding profile selection.** Editing a control from a profile
   preselects only that profile; the global "New binding" preselects all.
 - **Desktop layout is viewport-height with internal scrolling.** At >=1101px,
