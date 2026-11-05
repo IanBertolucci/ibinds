@@ -127,3 +127,98 @@ func TestFlagOverride(t *testing.T) {
 		t.Fatalf("ProfilesDir = %q, want %q", c.ProfilesDir, flagDir)
 	}
 }
+
+func TestDefaultIsFirstRun(t *testing.T) {
+	home := isolateHome(t)
+	c, err := Load()
+	if err != nil {
+		t.Fatalf("Load: %v", err)
+	}
+	wantIRacing := filepath.Join(home, "Documents", "iRacing")
+	if c.IRacingDir != wantIRacing {
+		t.Fatalf("IRacingDir = %q, want %q", c.IRacingDir, wantIRacing)
+	}
+	if c.ProfilesDir != ProfilesDirFor(wantIRacing) {
+		t.Fatalf("ProfilesDir = %q, want derived", c.ProfilesDir)
+	}
+	if c.Onboarded {
+		t.Fatal("Onboarded = true, want false for a fresh config")
+	}
+}
+
+func TestIRacingDirDerivesProfilesDir(t *testing.T) {
+	home := isolateHome(t)
+	root := filepath.Join(home, "Documents", "iRacing")
+	if err := Save(&Config{IRacingDir: root, Onboarded: true}); err != nil {
+		t.Fatalf("Save: %v", err)
+	}
+	c, err := Load()
+	if err != nil {
+		t.Fatalf("Load: %v", err)
+	}
+	if c.ProfilesDir != filepath.Join(root, "profiles", "controls") {
+		t.Fatalf("ProfilesDir = %q, want derived", c.ProfilesDir)
+	}
+	if !c.Onboarded {
+		t.Fatal("Onboarded = false, want true")
+	}
+}
+
+func TestLegacyProfilesDirMigratesWithoutOnboardingModal(t *testing.T) {
+	home := isolateHome(t)
+	root := filepath.Join(home, "Documents", "iRacing")
+	legacy := filepath.Join(root, "profiles", "controls")
+	if err := Save(&Config{ProfilesDir: legacy}); err != nil {
+		t.Fatalf("Save: %v", err)
+	}
+	c, err := Load()
+	if err != nil {
+		t.Fatalf("Load: %v", err)
+	}
+	if c.ProfilesDir != legacy {
+		t.Fatalf("ProfilesDir = %q, want %q", c.ProfilesDir, legacy)
+	}
+	if c.IRacingDir != root {
+		t.Fatalf("IRacingDir = %q, want %q", c.IRacingDir, root)
+	}
+	if !c.Onboarded {
+		t.Fatal("Onboarded = false, want true for a legacy config")
+	}
+}
+
+func TestLegacyCustomProfilesDirKeepsNoIRacingDir(t *testing.T) {
+	home := isolateHome(t)
+	custom := filepath.Join(home, "custom-controls")
+	if err := Save(&Config{ProfilesDir: custom}); err != nil {
+		t.Fatalf("Save: %v", err)
+	}
+	c, err := Load()
+	if err != nil {
+		t.Fatalf("Load: %v", err)
+	}
+	if c.ProfilesDir != custom {
+		t.Fatalf("ProfilesDir = %q, want %q", c.ProfilesDir, custom)
+	}
+	if c.IRacingDir != "" {
+		t.Fatalf("IRacingDir = %q, want empty", c.IRacingDir)
+	}
+	if !c.Onboarded {
+		t.Fatal("Onboarded = false, want true")
+	}
+}
+
+func TestFlagOverrideDerivesIRacingDirAndOnboards(t *testing.T) {
+	home := isolateHome(t)
+	root := filepath.Join(home, "Documents", "iRacing")
+	FlagDir = filepath.Join(root, "profiles", "controls")
+	c, err := Load()
+	if err != nil {
+		t.Fatalf("Load: %v", err)
+	}
+	if c.IRacingDir != root {
+		t.Fatalf("IRacingDir = %q, want %q", c.IRacingDir, root)
+	}
+	if !c.Onboarded {
+		t.Fatal("Onboarded = false, want true for flag override")
+	}
+}
