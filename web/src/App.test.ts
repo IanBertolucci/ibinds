@@ -248,3 +248,92 @@ describe('App calibration tab', () => {
     target.remove();
   });
 });
+
+describe('App first-run onboarding', () => {
+  function mockWithSettings(settings: Record<string, unknown>) {
+    globalThis.fetch = vi.fn(async (input: RequestInfo | URL) => {
+      const url = String(input);
+      if (url.startsWith('/api/settings')) return jsonResponse(settings);
+      if (url.startsWith('/api/profiles')) return jsonResponse([]);
+      if (url.startsWith('/api/input/devices')) return jsonResponse([]);
+      return jsonResponse({});
+    }) as typeof fetch;
+  }
+
+  test('opens the confirmation dialog when onboarded is false', async () => {
+    mockWithSettings({
+      iRacingDir: 'C:\\Users\\me\\Documents\\iRacing',
+      profilesDir: 'C:\\Users\\me\\Documents\\iRacing\\profiles\\controls',
+      defaultDeviceInstanceGUID: '',
+      onboarded: false,
+    });
+    const target = document.createElement('div');
+    document.body.appendChild(target);
+    const app = mount(App, { target });
+    await settle();
+
+    expect(target.textContent).toContain('Confirm your iRacing folder');
+    expect(target.textContent).toContain('No profile selected');
+    unmount(app);
+    target.remove();
+  });
+
+  test('does not open the dialog when onboarded is true', async () => {
+    mockWithSettings({
+      iRacingDir: 'C:\\Users\\me\\Documents\\iRacing',
+      profilesDir: 'C:\\Users\\me\\Documents\\iRacing\\profiles\\controls',
+      defaultDeviceInstanceGUID: '',
+      onboarded: true,
+    });
+    const target = document.createElement('div');
+    document.body.appendChild(target);
+    const app = mount(App, { target });
+    await settle();
+
+    expect(target.textContent).not.toContain('Confirm your iRacing folder');
+    unmount(app);
+    target.remove();
+  });
+
+  test('confirming the folder closes the dialog', async () => {
+    let onboarded = false;
+    globalThis.fetch = vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
+      const url = String(input);
+      if (url.startsWith('/api/settings')) {
+        if (init?.method === 'POST') {
+          onboarded = true;
+          return jsonResponse({
+            iRacingDir: 'C:\\Users\\me\\Documents\\iRacing',
+            profilesDir: 'C:\\Users\\me\\Documents\\iRacing\\profiles\\controls',
+            defaultDeviceInstanceGUID: '',
+            onboarded: true,
+          });
+        }
+        return jsonResponse({
+          iRacingDir: 'C:\\Users\\me\\Documents\\iRacing',
+          profilesDir: 'C:\\Users\\me\\Documents\\iRacing\\profiles\\controls',
+          defaultDeviceInstanceGUID: '',
+          onboarded,
+        });
+      }
+      if (url.startsWith('/api/profiles')) return jsonResponse([]);
+      if (url.startsWith('/api/input/devices')) return jsonResponse([]);
+      return jsonResponse({});
+    }) as typeof fetch;
+
+    const target = document.createElement('div');
+    document.body.appendChild(target);
+    const app = mount(App, { target });
+    await settle();
+
+    const confirm = [...target.querySelectorAll('button')].find(
+      (b) => b.textContent?.trim() === 'Confirm',
+    ) as HTMLButtonElement;
+    confirm.click();
+    await settle();
+
+    expect(target.textContent).not.toContain('Confirm your iRacing folder');
+    unmount(app);
+    target.remove();
+  });
+});

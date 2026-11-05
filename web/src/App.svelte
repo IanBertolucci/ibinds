@@ -13,7 +13,10 @@
   let bindingModal = $state<{ preset: string; profileId: string } | null>(null);
   let settingsOpen = $state(false);
   let error = $state('');
+  let iRacingDir = $state('');
   let profilesDir = $state('');
+  let onboarded = $state(true);
+  let firstRun = $state(false);
   let defaultDeviceInstanceGUID = $state('');
 
   const activeProfile = $derived(profiles.find((p) => p.id === activeId));
@@ -55,11 +58,24 @@
   async function loadSettings() {
     try {
       const s = await api.fetchSettings();
-      profilesDir = s.profilesDir;
+      iRacingDir = s.iRacingDir ?? '';
+      profilesDir = s.profilesDir ?? '';
+      onboarded = s.onboarded === true;
+      firstRun = s.onboarded === false;
       defaultDeviceInstanceGUID = s.defaultDeviceInstanceGUID;
     } catch {
       /* ignore: settings are optional for the main flow */
     }
+  }
+
+  function onSettingsSaved(s: AppSettings) {
+    iRacingDir = s.iRacingDir ?? '';
+    profilesDir = s.profilesDir ?? '';
+    onboarded = true;
+    firstRun = false;
+    settingsOpen = false;
+    defaultDeviceInstanceGUID = s.defaultDeviceInstanceGUID;
+    loadProfiles();
   }
 
   function selectProfile(id: string) {
@@ -136,15 +152,13 @@
     />
   {/if}
 
-  {#if settingsOpen}
+  {#if settingsOpen || firstRun}
     <Settings
+      {iRacingDir}
       {profilesDir}
       {defaultDeviceInstanceGUID}
-      onSaved={(s: AppSettings) => {
-        profilesDir = s.profilesDir;
-        defaultDeviceInstanceGUID = s.defaultDeviceInstanceGUID;
-        loadProfiles();
-      }}
+      {firstRun}
+      onSaved={onSettingsSaved}
       onClose={() => (settingsOpen = false)}
     />
   {/if}
