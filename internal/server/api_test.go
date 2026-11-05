@@ -254,6 +254,24 @@ func TestSettingsPersistsProfilesDir(t *testing.T) {
 	}
 }
 
+func TestSettingsAlwaysIncludesOnboarded(t *testing.T) {
+	dir := setupProfilesDir(t, map[string]string{"f4": "f4_key_u.cfg"})
+	ts := newServer(t, dir, ServerOpts{})
+
+	resp := get(t, ts, "/api/settings?token="+testToken)
+	var raw map[string]any
+	if err := json.Unmarshal(readBody(t, resp), &raw); err != nil {
+		t.Fatal(err)
+	}
+	value, ok := raw["onboarded"]
+	if !ok {
+		t.Fatal("settings response is missing the onboarded field")
+	}
+	if value != false {
+		t.Fatalf("onboarded = %v, want false", value)
+	}
+}
+
 func TestProfilesMissingDirReturnsEmptyList(t *testing.T) {
 	missing := filepath.Join(t.TempDir(), "does-not-exist")
 	ts := newServer(t, missing, ServerOpts{})

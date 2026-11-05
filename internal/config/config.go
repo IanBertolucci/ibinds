@@ -12,7 +12,7 @@ type Config struct {
 	IRacingDir                string `json:"iRacingDir,omitempty"`
 	ProfilesDir               string `json:"profilesDir,omitempty"`
 	DefaultDeviceInstanceGUID string `json:"defaultDeviceInstanceGUID"`
-	Onboarded                 bool   `json:"onboarded,omitempty"`
+	Onboarded                 bool   `json:"onboarded"`
 }
 
 // ProfilesDirFor returns the standard controls profiles directory for an
