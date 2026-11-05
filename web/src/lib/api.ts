@@ -76,8 +76,10 @@ export interface CaptureResp {
 }
 
 export interface Settings {
+  iRacingDir: string;
   profilesDir: string;
   defaultDeviceInstanceGUID: string;
+  onboarded: boolean;
 }
 
 export interface CalibReq {
@@ -165,6 +167,6 @@ export const api = {
   capture: (timeoutMs: number) =>
     request<CaptureResp>('POST', '/api/input/capture', { timeoutMs }),
   fetchSettings: () => request<Settings>('GET', '/api/settings'),
-  saveSettings: (profilesDir: string, defaultDeviceInstanceGUID: string) =>
-    request<Settings>('POST', '/api/settings', { profilesDir, defaultDeviceInstanceGUID }),
+  saveSettings: (iRacingDir: string, defaultDeviceInstanceGUID: string) =>
+    request<Settings>('POST', '/api/settings', { iRacingDir, defaultDeviceInstanceGUID }),
 };

@@ -53,6 +53,24 @@ describe('keyToByte', () => {
   });
 });
 
+describe('api.saveSettings', () => {
+  test('posts the iRacing folder and device', async () => {
+    sessionStorage.setItem('token', 'abc');
+    globalThis.fetch = vi.fn().mockResolvedValue({
+      ok: true,
+      status: 200,
+      json: async () => ({ iRacingDir: 'R', profilesDir: 'P', defaultDeviceInstanceGUID: '{}', onboarded: true }),
+    });
+    await api.saveSettings('R', '{}');
+    const call = (globalThis.fetch as ReturnType<typeof vi.fn>).mock.calls[0];
+    expect(String(call[0])).toContain('/api/settings');
+    expect(JSON.parse(call[1].body as string)).toEqual({
+      iRacingDir: 'R',
+      defaultDeviceInstanceGUID: '{}',
+    });
+  });
+});
+
 describe('api.applyBinding', () => {
   test('parses applied/skipped', async () => {
     sessionStorage.setItem('token', 'abc');
