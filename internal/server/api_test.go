@@ -8,6 +8,7 @@ import (
 	"net/http/httptest"
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 
 	"ibinds/internal/cfgparse"
@@ -250,6 +251,83 @@ func TestSettingsPersistsProfilesDir(t *testing.T) {
 	}
 	if cfg.ProfilesDir != newDir {
 		t.Fatalf("ProfilesDir = %q, want %q", cfg.ProfilesDir, newDir)
+	}
+}
+
+func TestProfilesMissingDirReturnsEmptyList(t *testing.T) {
+	missing := filepath.Join(t.TempDir(), "does-not-exist")
+	ts := newServer(t, missing, ServerOpts{})
+
+	resp := get(t, ts, "/api/profiles?token="+testToken)
+	if resp.StatusCode != http.StatusOK {
+		t.Fatalf("status = %d, want 200", resp.StatusCode)
+	}
+	if body := strings.TrimSpace(string(readBody(t, resp))); body != "[]" {
+		t.Fatalf("body = %q, want []", body)
+	}
+}
+
+func TestSettingsConfirmsIRacingDir(t *testing.T) {
+	dir := setupProfilesDir(t, map[string]string{"f4": "f4_key_u.cfg"})
+	ts := newServer(t, dir, ServerOpts{})
+
+	root := t.TempDir()
+	if err := os.MkdirAll(filepath.Join(root, "profiles", "controls"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	resp := postJSON(t, ts, "/api/settings?token="+testToken, map[string]any{"iRacingDir": root})
+	if resp.StatusCode != http.StatusOK {
+		t.Fatalf("status = %d, want 200 (%s)", resp.StatusCode, readBody(t, resp))
+	}
+
+	getResp := get(t, ts, "/api/settings?token="+testToken)
+	var saved map[string]any
+	if err := json.Unmarshal(readBody(t, getResp), &saved); err != nil {
+		t.Fatal(err)
+	}
+	if saved["iRacingDir"] != root {
+		t.Fatalf("iRacingDir = %v, want %q", saved["iRacingDir"], root)
+	}
+	if saved["profilesDir"] != filepath.Join(root, "profiles", "controls") {
+		t.Fatalf("profilesDir = %v, want derived", saved["profilesDir"])
+	}
+	if saved["onboarded"] != true {
+		t.Fatalf("onboarded = %v, want true", saved["onboarded"])
+	}
+}
+
+func TestSettingsRejectsInvalidIRacingDir(t *testing.T) {
+	dir := setupProfilesDir(t, map[string]string{"f4": "f4_key_u.cfg"})
+	ts := newServer(t, dir, ServerOpts{})
+
+	for _, bad := range []string{filepath.Join(t.TempDir(), "missing"), "relative/path"} {
+		resp := postJSON(t, ts, "/api/settings?token="+testToken, map[string]any{"iRacingDir": bad})
+		if resp.StatusCode != http.StatusBadRequest {
+			t.Fatalf("iRacingDir %q: status = %d, want 400", bad, resp.StatusCode)
+		}
+	}
+}
+
+func TestSettingsDeviceOnlySaveKeepsProfilesDir(t *testing.T) {
+	dir := setupProfilesDir(t, map[string]string{"f4": "f4_key_u.cfg"})
+	ts := newServer(t, dir, ServerOpts{})
+
+	dev := "{991805D0-2EB6-11F1-800A-444553540000}"
+	resp := postJSON(t, ts, "/api/settings?token="+testToken, map[string]any{
+		"defaultDeviceInstanceGUID": dev,
+	})
+	if resp.StatusCode != http.StatusOK {
+		t.Fatalf("status = %d, want 200 (%s)", resp.StatusCode, readBody(t, resp))
+	}
+	cfg, err := config.Load()
+	if err != nil {
+		t.Fatalf("config.Load: %v", err)
+	}
+	if cfg.ProfilesDir != dir {
+		t.Fatalf("ProfilesDir = %q, want %q", cfg.ProfilesDir, dir)
+	}
+	if cfg.DefaultDeviceInstanceGUID != dev {
+		t.Fatalf("device = %q, want %q", cfg.DefaultDeviceInstanceGUID, dev)
 	}
 }
 
