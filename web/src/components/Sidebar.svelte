@@ -45,7 +45,9 @@
         {p.displayName}{p.isBaseline ? ' (baseline)' : ''}
       </button>
     {:else}
-      <p class="empty">No profiles match “{search}”.</p>
+      <p class="empty">
+        {search.trim() ? `No profiles match “${search}”.` : 'No profiles registered'}
+      </p>
     {/each}
   </div>
 </nav>

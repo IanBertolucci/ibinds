@@ -60,4 +60,23 @@ describe('Sidebar', () => {
     unmount(app);
     target.remove();
   });
+
+  test('empty profile list says none are registered', () => {
+    const { target, app } = mountSidebar({ profiles: [] });
+    expect(target.textContent).toContain('No profiles registered');
+    expect(target.textContent).not.toContain('No profiles match');
+    unmount(app);
+    target.remove();
+  });
+
+  test('search with no matches keeps the search message', async () => {
+    const { target, app } = mountSidebar();
+    const input = target.querySelector('input[type="search"]') as HTMLInputElement;
+    input.value = 'zzz';
+    input.dispatchEvent(new Event('input', { bubbles: true }));
+    await tick();
+    expect(target.textContent).toContain('No profiles match');
+    unmount(app);
+    target.remove();
+  });
 });
