@@ -4,6 +4,7 @@ import {
   buildCopyReq,
   copyableControl,
   currentBinding,
+  deriveProfilesDir,
   loadControlsByProfile,
   selectAll,
   toggleSelection,
@@ -25,6 +26,20 @@ function control(partial: Partial<ControlDTO>): ControlDTO {
     ...partial,
   };
 }
+
+describe('deriveProfilesDir', () => {
+  test('windows path', () => {
+    expect(deriveProfilesDir('C:\\Users\\me\\Documents\\iRacing')).toBe(
+      'C:\\Users\\me\\Documents\\iRacing\\profiles\\controls',
+    );
+  });
+  test('posix path and trailing separator', () => {
+    expect(deriveProfilesDir('/home/me/iRacing/')).toBe('/home/me/iRacing/profiles/controls');
+  });
+  test('empty stays empty', () => {
+    expect(deriveProfilesDir('   ')).toBe('');
+  });
+});
 
 describe('selection', () => {
   test('select all and deselect one', () => {

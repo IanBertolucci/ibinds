@@ -96,7 +96,7 @@ describe('App profile navigation', () => {
     target.remove();
   });
 
-  test('settings gear opens the profiles directory dialog', async () => {
+  test('settings gear opens the iRacing folder dialog', async () => {
     const { target, app } = await setupApp();
 
     const gear = target.querySelector('button[aria-label="Settings"]') as HTMLButtonElement;
@@ -104,8 +104,8 @@ describe('App profile navigation', () => {
     await settle();
 
     expect(target.querySelector('[role="dialog"]')).toBeTruthy();
-    expect(target.textContent).toContain('Profiles directory');
-    expect(target.querySelector('input[aria-label="Profiles directory"]')).toBeTruthy();
+    expect(target.textContent).toContain('iRacing folder');
+    expect(target.querySelector('input[aria-label="iRacing folder"]')).toBeTruthy();
 
     unmount(app);
     target.remove();

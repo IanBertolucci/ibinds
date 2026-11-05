@@ -22,7 +22,8 @@ function mountSettings(overrides: Record<string, unknown> = {}) {
   const app = mount(Settings, {
     target,
     props: {
-      profilesDir: 'C:\\Users\\user\\Documents\\iRacing',
+      iRacingDir: 'C:\\Users\\user\\Documents\\iRacing',
+      profilesDir: 'C:\\Users\\user\\Documents\\iRacing\\profiles\\controls',
       defaultDeviceInstanceGUID: '',
       onSaved,
       onClose,
@@ -38,11 +39,39 @@ describe('Settings', () => {
     globalThis.fetch = vi.fn(async () => jsonResponse([])) as typeof fetch;
   });
 
-  test('shows the profiles directory field', () => {
+  test('shows the iRacing folder field', () => {
     const { target, app } = mountSettings();
-    const input = target.querySelector('input[aria-label="Profiles directory"]') as HTMLInputElement;
+    const input = target.querySelector('input[aria-label="iRacing folder"]') as HTMLInputElement;
     expect(input).toBeTruthy();
     expect(input.value).toBe('C:\\Users\\user\\Documents\\iRacing');
+    unmount(app);
+    target.remove();
+  });
+
+  test('first-run mode asks to confirm and cannot be closed', () => {
+    const { target, app, onClose } = mountSettings({
+      firstRun: true,
+      iRacingDir: 'R',
+      profilesDir: 'R/profiles/controls',
+    });
+    expect(target.textContent).toContain('Confirm your iRacing folder');
+    expect(target.querySelector('button[aria-label="Close settings"]')).toBeNull();
+    const dialog = target.querySelector('[role="dialog"]') as HTMLElement;
+    dialog.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true }));
+    expect(onClose).not.toHaveBeenCalled();
+    unmount(app);
+    target.remove();
+  });
+
+  test('shows the derived profiles folder from the iRacing folder', () => {
+    const { target, app } = mountSettings({
+      iRacingDir: 'C:\\Users\\me\\Documents\\iRacing',
+      profilesDir: '',
+    });
+    const derived = target.querySelector('[aria-label="Profiles folder"]') as HTMLElement;
+    expect(derived.textContent?.trim()).toBe(
+      'C:\\Users\\me\\Documents\\iRacing\\profiles\\controls',
+    );
     unmount(app);
     target.remove();
   });
@@ -89,8 +118,25 @@ describe('Settings', () => {
     expect(saveCall).toBeTruthy();
     const body = JSON.parse(saveCall![1]!.body as string);
     expect(body).toEqual({
-      profilesDir: 'C:\\Users\\user\\Documents\\iRacing',
+      iRacingDir: 'C:\\Users\\user\\Documents\\iRacing',
       defaultDeviceInstanceGUID: '{BBB}',
+    });
+    unmount(app);
+    target.remove();
+  });
+
+  test('save posts the iRacing folder', async () => {
+    const { target, app } = mountSettings({ iRacingDir: 'C:\\Users\\me\\Documents\\iRacing' });
+    const save = [...target.querySelectorAll('button')].find(
+      (b) => b.textContent?.trim() === 'Save',
+    ) as HTMLButtonElement;
+    save.click();
+    await settle();
+    const calls = (globalThis.fetch as ReturnType<typeof vi.fn>).mock.calls;
+    const saveCall = calls.find((c) => String(c[0]).includes('/api/settings'));
+    expect(JSON.parse(saveCall![1]!.body as string)).toEqual({
+      iRacingDir: 'C:\\Users\\me\\Documents\\iRacing',
+      defaultDeviceInstanceGUID: '',
     });
     unmount(app);
     target.remove();

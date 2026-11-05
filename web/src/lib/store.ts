@@ -82,6 +82,15 @@ export function buildCopyReq(
   };
 }
 
+// deriveProfilesDir returns the standard controls folder for a confirmed
+// iRacing folder, keeping the separator style of the input.
+export function deriveProfilesDir(iRacingDir: string): string {
+  const base = iRacingDir.trim().replace(/[\\/]+$/, '');
+  if (!base) return '';
+  const sep = base.includes('\\') ? '\\' : '/';
+  return `${base}${sep}profiles${sep}controls`;
+}
+
 // copyableControl reports whether a control's binding can be copied: keys and
 // button bindings (including multi-button) are copyable; axis/unbound are not.
 export function copyableControl(control: ControlDTO): boolean {

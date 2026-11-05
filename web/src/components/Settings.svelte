@@ -1,26 +1,33 @@
 <script lang="ts">
   import { untrack } from 'svelte';
   import { api, type DeviceInfo, type Settings as SettingsDTO } from '../lib/api';
+  import { deriveProfilesDir } from '../lib/store';
   import Icon from './Icon.svelte';
   import { focusTrap } from '../lib/focusTrap';
 
   let {
+    iRacingDir = '',
     profilesDir,
     defaultDeviceInstanceGUID,
+    firstRun = false,
     onSaved,
     onClose,
   }: {
+    iRacingDir?: string;
     profilesDir: string;
     defaultDeviceInstanceGUID: string;
+    firstRun?: boolean;
     onSaved: (settings: SettingsDTO) => void;
     onClose: () => void;
   } = $props();
 
-  let value = $state(untrack(() => profilesDir));
+  let value = $state(untrack(() => iRacingDir));
   let deviceValue = $state(untrack(() => defaultDeviceInstanceGUID));
   let devices = $state<DeviceInfo[]>([]);
   let message = $state('');
   let error = $state('');
+
+  const derivedProfilesDir = $derived(value.trim() ? deriveProfilesDir(value) : profilesDir);
 
   $effect(() => {
     api
@@ -37,7 +44,7 @@
     message = '';
     error = '';
     try {
-      const res = await api.saveSettings(value, deviceValue);
+      const res = await api.saveSettings(value.trim(), deviceValue);
       message = 'Saved.';
       onSaved(res);
     } catch (e) {
@@ -49,35 +56,54 @@
 <div
   class="overlay"
   role="presentation"
-  onclick={(e) => e.target === e.currentTarget && onClose()}
+  onclick={(e) => {
+    if (!firstRun && e.target === e.currentTarget) onClose();
+  }}
 >
   <div
     class="modal settings-modal"
-    use:focusTrap={onClose}
+    use:focusTrap={firstRun ? () => {} : onClose}
     tabindex="-1"
     role="dialog"
     aria-modal="true"
     aria-labelledby="settings-title"
   >
     <div class="modal-header">
-      <h2 id="settings-title">Settings</h2>
-      <button class="icon-btn" aria-label="Close settings" onclick={onClose}>
-        <Icon name="close" />
-      </button>
+      <div>
+        <h2 id="settings-title">
+          {firstRun ? 'Confirm your iRacing folder' : 'Settings'}
+        </h2>
+        {#if firstRun}
+          <p class="modal-sub">
+            iBinds derives the control profiles folder from your iRacing folder.
+          </p>
+        {/if}
+      </div>
+      {#if !firstRun}
+        <button class="icon-btn" aria-label="Close settings" onclick={onClose}>
+          <Icon name="close" />
+        </button>
+      {/if}
     </div>
 
     <div class="modal-body">
       <div class="field">
-        <label class="field-label" for="profiles-dir">Profiles directory</label>
+        <label class="field-label" for="profiles-dir">iRacing folder</label>
         <input
           id="profiles-dir"
-          aria-label="Profiles directory"
+          aria-label="iRacing folder"
           data-autofocus
           bind:value={value}
           spellcheck="false"
           autocomplete="off"
         />
-        <span class="field-hint">The folder that contains your iRacing control profiles.</span>
+        <span class="field-hint">Usually Documents/iRacing.</span>
+      </div>
+
+      <div class="field">
+        <span class="field-label">Profiles folder</span>
+        <code class="derived-path" aria-label="Profiles folder">{derivedProfilesDir}</code>
+        <span class="field-hint">Derived from the iRacing folder.</span>
       </div>
 
       <div class="field">
@@ -104,8 +130,10 @@
     </div>
 
     <div class="modal-actions">
-      <button class="btn" onclick={onClose}>Close</button>
-      <button class="btn btn-primary" onclick={save}>Save</button>
+      {#if !firstRun}<button class="btn" onclick={onClose}>Close</button>{/if}
+      <button class="btn btn-primary" onclick={save}>
+        {firstRun ? 'Confirm' : 'Save'}
+      </button>
     </div>
   </div>
 </div>
@@ -113,6 +141,21 @@
 <style>
   .settings-modal {
     max-width: 34rem;
+  }
+  .modal-sub {
+    margin-top: 0.1rem;
+    color: var(--muted);
+    font-size: 0.78rem;
+  }
+  .derived-path {
+    display: block;
+    overflow-wrap: anywhere;
+    padding: 0.45rem 0.55rem;
+    border: 1px solid var(--border);
+    border-radius: var(--radius-sm);
+    background: var(--surface-2);
+    color: var(--muted);
+    font-size: 0.78rem;
   }
   .error {
     color: var(--danger);
