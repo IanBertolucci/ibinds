@@ -49,6 +49,7 @@ func Load() (*Config, error) {
 	}
 	if FlagDir != "" {
 		c.ProfilesDir = filepath.Clean(FlagDir)
+		c.IRacingDir = ""
 		if dir, ok := IRacingDirFromProfiles(c.ProfilesDir); ok {
 			c.IRacingDir = dir
 		}
@@ -57,6 +58,7 @@ func Load() (*Config, error) {
 	}
 	if env := os.Getenv("IBINDS_PROFILES_DIR"); env != "" {
 		c.ProfilesDir = filepath.Clean(env)
+		c.IRacingDir = ""
 		if dir, ok := IRacingDirFromProfiles(c.ProfilesDir); ok {
 			c.IRacingDir = dir
 		}
@@ -83,6 +85,25 @@ func Load() (*Config, error) {
 	}
 	c.IRacingDir = filepath.Join(doc, "iRacing")
 	c.ProfilesDir = ProfilesDirFor(c.IRacingDir)
+	return c, nil
+}
+
+// OverrideActive reports whether --dir or IBINDS_PROFILES_DIR overrides the
+// profiles directory for this process.
+func OverrideActive() bool {
+	return FlagDir != "" || os.Getenv("IBINDS_PROFILES_DIR") != ""
+}
+
+// LoadSaved reads the config file without applying flags, environment, or
+// defaults. It returns an empty Config when no file exists.
+func LoadSaved() (*Config, error) {
+	c, err := loadFile()
+	if err != nil {
+		if os.IsNotExist(err) {
+			return &Config{}, nil
+		}
+		return nil, err
+	}
 	return c, nil
 }
 

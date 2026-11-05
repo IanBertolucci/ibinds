@@ -63,6 +63,16 @@ describe('Settings', () => {
     target.remove();
   });
 
+  test('first-run confirm is disabled with an empty iRacing folder', () => {
+    const { target, app } = mountSettings({ firstRun: true, iRacingDir: '', profilesDir: '' });
+    const confirm = [...target.querySelectorAll('button')].find(
+      (b) => b.textContent?.trim() === 'Confirm',
+    ) as HTMLButtonElement;
+    expect(confirm.disabled).toBe(true);
+    unmount(app);
+    target.remove();
+  });
+
   test('shows the derived profiles folder from the iRacing folder', () => {
     const { target, app } = mountSettings({
       iRacingDir: 'C:\\Users\\me\\Documents\\iRacing',

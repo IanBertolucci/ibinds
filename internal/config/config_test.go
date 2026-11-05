@@ -207,6 +207,29 @@ func TestLegacyCustomProfilesDirKeepsNoIRacingDir(t *testing.T) {
 	}
 }
 
+func TestOverrideClearsStaleIRacingDir(t *testing.T) {
+	home := isolateHome(t)
+	if err := Save(&Config{
+		IRacingDir: filepath.Join(home, "saved-iracing"),
+		Onboarded:  true,
+	}); err != nil {
+		t.Fatalf("Save: %v", err)
+	}
+	override := filepath.Join(home, "custom-controls")
+	FlagDir = override
+
+	c, err := Load()
+	if err != nil {
+		t.Fatalf("Load: %v", err)
+	}
+	if c.ProfilesDir != override {
+		t.Fatalf("ProfilesDir = %q, want override %q", c.ProfilesDir, override)
+	}
+	if c.IRacingDir != "" {
+		t.Fatalf("IRacingDir = %q, want empty for a non-derivable override", c.IRacingDir)
+	}
+}
+
 func TestFlagOverrideDerivesIRacingDirAndOnboards(t *testing.T) {
 	home := isolateHome(t)
 	root := filepath.Join(home, "Documents", "iRacing")

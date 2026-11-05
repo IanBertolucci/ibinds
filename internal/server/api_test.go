@@ -49,13 +49,18 @@ func setupProfilesDir(t *testing.T, profiles map[string]string) string {
 
 func newServer(t *testing.T, profilesDir string, opts ServerOpts) *httptest.Server {
 	t.Helper()
+	return newServerWithConfig(t, &config.Config{ProfilesDir: profilesDir, Onboarded: true}, opts)
+}
+
+func newServerWithConfig(t *testing.T, cfg *config.Config, opts ServerOpts) *httptest.Server {
+	t.Helper()
 	t.Setenv("XDG_CONFIG_HOME", filepath.Join(t.TempDir(), ".config"))
 	t.Setenv("IBINDS_PROFILES_DIR", "")
 	config.FlagDir = ""
 	if opts.Token == "" {
 		opts.Token = testToken
 	}
-	s := New(&config.Config{ProfilesDir: profilesDir}, opts)
+	s := New(cfg, opts)
 	ts := httptest.NewServer(s.Handler())
 	t.Cleanup(ts.Close)
 	return ts
@@ -256,7 +261,7 @@ func TestSettingsPersistsProfilesDir(t *testing.T) {
 
 func TestSettingsAlwaysIncludesOnboarded(t *testing.T) {
 	dir := setupProfilesDir(t, map[string]string{"f4": "f4_key_u.cfg"})
-	ts := newServer(t, dir, ServerOpts{})
+	ts := newServerWithConfig(t, &config.Config{ProfilesDir: dir, Onboarded: false}, ServerOpts{})
 
 	resp := get(t, ts, "/api/settings?token="+testToken)
 	var raw map[string]any
@@ -269,6 +274,55 @@ func TestSettingsAlwaysIncludesOnboarded(t *testing.T) {
 	}
 	if value != false {
 		t.Fatalf("onboarded = %v, want false", value)
+	}
+}
+
+func TestFirstRunRequiresIRacingDir(t *testing.T) {
+	dir := setupProfilesDir(t, map[string]string{"f4": "f4_key_u.cfg"})
+	ts := newServerWithConfig(t, &config.Config{ProfilesDir: dir, Onboarded: false}, ServerOpts{})
+
+	resp := postJSON(t, ts, "/api/settings?token="+testToken, map[string]any{"iRacingDir": ""})
+	if resp.StatusCode != http.StatusBadRequest {
+		t.Fatalf("status = %d, want 400 (%s)", resp.StatusCode, readBody(t, resp))
+	}
+}
+
+func TestSettingsSaveKeepsActiveOverride(t *testing.T) {
+	override := t.TempDir()
+	ts := newServerWithConfig(t, &config.Config{ProfilesDir: override, Onboarded: true}, ServerOpts{})
+	t.Setenv("IBINDS_PROFILES_DIR", override)
+
+	root := t.TempDir()
+	if err := os.MkdirAll(filepath.Join(root, "profiles", "controls"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	resp := postJSON(t, ts, "/api/settings?token="+testToken, map[string]any{"iRacingDir": root})
+	if resp.StatusCode != http.StatusOK {
+		t.Fatalf("status = %d, want 200 (%s)", resp.StatusCode, readBody(t, resp))
+	}
+
+	getResp := get(t, ts, "/api/settings?token="+testToken)
+	var runtimeCfg map[string]any
+	if err := json.Unmarshal(readBody(t, getResp), &runtimeCfg); err != nil {
+		t.Fatal(err)
+	}
+	if runtimeCfg["profilesDir"] != override {
+		t.Fatalf("runtime profilesDir = %v, want override %q", runtimeCfg["profilesDir"], override)
+	}
+	if runtimeCfg["iRacingDir"] != root {
+		t.Fatalf("runtime iRacingDir = %v, want %q", runtimeCfg["iRacingDir"], root)
+	}
+
+	os.Unsetenv("IBINDS_PROFILES_DIR")
+	cfg, err := config.Load()
+	if err != nil {
+		t.Fatalf("config.Load: %v", err)
+	}
+	if cfg.IRacingDir != root {
+		t.Fatalf("persisted IRacingDir = %q, want %q", cfg.IRacingDir, root)
+	}
+	if cfg.ProfilesDir != filepath.Join(root, "profiles", "controls") {
+		t.Fatalf("persisted ProfilesDir = %q, want derived", cfg.ProfilesDir)
 	}
 }
 

@@ -207,7 +207,21 @@ func (s *Server) saveSettings(w http.ResponseWriter, r *http.Request) {
 	if req.DefaultDeviceInstanceGUID != nil {
 		device = *req.DefaultDeviceInstanceGUID
 	}
-	newCfg := &config.Config{
+
+	saved, err := config.LoadSaved()
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+	persist := &config.Config{
+		IRacingDir:                saved.IRacingDir,
+		ProfilesDir:               saved.ProfilesDir,
+		DefaultDeviceInstanceGUID: device,
+		Onboarded:                 true,
+	}
+	runtimeCfg := &config.Config{
+		IRacingDir:                current.IRacingDir,
+		ProfilesDir:               current.ProfilesDir,
 		DefaultDeviceInstanceGUID: device,
 		Onboarded:                 true,
 	}
@@ -219,33 +233,44 @@ func (s *Server) saveSettings(w http.ResponseWriter, r *http.Request) {
 			http.Error(w, err.Error(), http.StatusBadRequest)
 			return
 		}
-		newCfg.IRacingDir = dir
-		newCfg.ProfilesDir = config.ProfilesDirFor(dir)
+		persist.IRacingDir = dir
+		persist.ProfilesDir = ""
+		runtimeCfg.IRacingDir = dir
+		if config.OverrideActive() && current.ProfilesDir != "" {
+			runtimeCfg.ProfilesDir = current.ProfilesDir
+		} else {
+			runtimeCfg.ProfilesDir = config.ProfilesDirFor(dir)
+		}
 	case strings.TrimSpace(req.ProfilesDir) != "":
 		dir, err := existingDir(req.ProfilesDir)
 		if err != nil {
 			http.Error(w, err.Error(), http.StatusBadRequest)
 			return
 		}
-		newCfg.ProfilesDir = dir
+		persist.ProfilesDir = dir
+		persist.IRacingDir = ""
 		if root, ok := config.IRacingDirFromProfiles(dir); ok {
-			newCfg.IRacingDir = root
+			persist.IRacingDir = root
 		}
+		runtimeCfg.IRacingDir = persist.IRacingDir
+		runtimeCfg.ProfilesDir = dir
 	default:
-		if current.ProfilesDir == "" {
+		if !current.Onboarded {
 			http.Error(w, "iRacing folder is required", http.StatusBadRequest)
 			return
 		}
-		newCfg.IRacingDir = current.IRacingDir
-		newCfg.ProfilesDir = current.ProfilesDir
+		if !config.OverrideActive() && persist.IRacingDir == "" && persist.ProfilesDir == "" {
+			persist.IRacingDir = current.IRacingDir
+			persist.ProfilesDir = current.ProfilesDir
+		}
 	}
 
-	if err := config.Save(newCfg); err != nil {
+	if err := config.Save(persist); err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
 	}
-	s.cfg.Store(newCfg)
-	writeJSON(w, http.StatusOK, newCfg)
+	s.cfg.Store(runtimeCfg)
+	writeJSON(w, http.StatusOK, runtimeCfg)
 }
 
 // existingDir trims, requires an absolute path, cleans it, and verifies that it

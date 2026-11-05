@@ -131,7 +131,11 @@
 
     <div class="modal-actions">
       {#if !firstRun}<button class="btn" onclick={onClose}>Close</button>{/if}
-      <button class="btn btn-primary" onclick={save}>
+      <button
+        class="btn btn-primary"
+        onclick={save}
+        disabled={firstRun && !value.trim()}
+      >
         {firstRun ? 'Confirm' : 'Save'}
       </button>
     </div>
